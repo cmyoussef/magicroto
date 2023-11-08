@@ -62,7 +62,7 @@ class MagicRotoSelector(GizmoBase):
         # 3. Connect plus_merge_node to output_node
         self.output_node.setInput(0, self.plus_merge_node)
 
-        self.mask_input_node
+        # self.mask_input_node
 
         # End of gizmo modification
         self.gizmo.end()
