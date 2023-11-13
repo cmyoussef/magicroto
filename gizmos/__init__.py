@@ -147,12 +147,12 @@ def populate_toolbar(toolbar, dev_mode=False):
     """
     full_package_name, current_path = get_current_package()
     icon_path = os.path.join(os.path.dirname(current_path), 'icons', "sd.png")
-    m = toolbar.addMenu("EasyTracking", icon=icon_path)
+    m = toolbar.addMenu("MagicRoto", icon=icon_path)
     classes_dict = get_classes()
     classes_list = []
 
     # Populate the menu with commands for each class
-    print("Loading EasyTracking toolbar:")
+    print("Loading MagicRoto toolbar:")
     for group, gizmos in classes_dict.items():
         print(f'|_Populating {group}')
         for g in gizmos:

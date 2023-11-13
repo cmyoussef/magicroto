@@ -195,7 +195,7 @@ class GizmoBase:
         self.save_config()
         info_dict = self.get_knob_info()
         home_directory = os.path.expanduser("~")
-        file_path = os.path.join(home_directory, ".easyTrack")
+        file_path = os.path.join(home_directory, ".magicRoto")
         try:
             with open(file_path, 'w') as f:
                 json.dump(info_dict, f, indent=4)
@@ -215,7 +215,7 @@ class GizmoBase:
     def save_config(self):
 
         home_directory = os.path.expanduser("~")
-        file_path = os.path.join(home_directory, ".easyTrack_config")
+        file_path = os.path.join(home_directory, ".magicRoto_config")
         info_dict = {}
         if os.path.exists(file_path):
             with open(file_path, 'r') as f:
@@ -235,7 +235,7 @@ class GizmoBase:
 
         node = node or self.gizmo
         home_directory = os.path.expanduser("~")
-        file_path = os.path.join(home_directory, ".easyTrack")
+        file_path = os.path.join(home_directory, ".magicRoto")
         if os.path.exists(file_path):
             nuke.tprint(f'Loading settings from {file_path} on {node.name()}')
             with open(file_path, 'r') as f:
@@ -247,7 +247,7 @@ class GizmoBase:
 
     def load_config(self):
         home_directory = os.path.expanduser("~")
-        file_path = os.path.join(home_directory, ".easyTrack_config")
+        file_path = os.path.join(home_directory, ".magicRoto_config")
         fresh_load_config = config_dict
         if os.path.exists(file_path):
             print(f'loading from {file_path}')
@@ -315,11 +315,13 @@ class GizmoBase:
         self.add_divider("Advanced CMD")
         if not self.gizmo.knob('pre_cmd_knob'):
             pre_cmd_knob = nuke.Multiline_Eval_String_Knob('pre_cmd_knob', 'pre cmd')
+            pre_cmd_knob.setValue(config_dict.get('pre_cmd', ''))
             pre_cmd_knob.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(pre_cmd_knob)
 
         if not self.gizmo.knob('post_cmd_knob'):
             post_cmd_knob = nuke.Multiline_Eval_String_Knob('post_cmd_knob', 'post cmd')
+            post_cmd_knob.setValue(config_dict.get('post_cmd', ''))
             post_cmd_knob.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(post_cmd_knob)
 

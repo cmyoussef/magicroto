@@ -1,6 +1,10 @@
+#!/usr/bin/env python3
+
 import cv2
+import sys
+print(sys.version)
 import numpy as np
-import svgwrite
+# import svgwrite
 import torch
 from PIL import Image
 from segment_anything import sam_model_registry, SamPredictor
@@ -75,18 +79,18 @@ class BaseSegmenter:
         return masks, scores, logits
 
 
-def create_svg_from_array(data, filename):
-    # Find contours using OpenCV
-    contours, _ = cv2.findContours(data.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+# def create_svg_from_array(data, filename):
+#     # Find contours using OpenCV
+#     contours, _ = cv2.findContours(data.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    dwg = svgwrite.Drawing(filename, profile='tiny')
+#     dwg = svgwrite.Drawing(filename, profile='tiny')
 
-    for contour in contours:
-        # Convert contour coordinates to SVG path
-        path_data = 'M ' + ' L '.join(f'{pt[0][0]},{pt[0][1]}' for pt in contour)
-        dwg.add(dwg.path(d=path_data, fill='black', stroke='black'))
+#     for contour in contours:
+#         # Convert contour coordinates to SVG path
+#         path_data = 'M ' + ' L '.join(f'{pt[0][0]},{pt[0][1]}' for pt in contour)
+#         dwg.add(dwg.path(d=path_data, fill='black', stroke='black'))
 
-    dwg.save()
+#     dwg.save()
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ class MagicRotoSelector(GizmoBase):
 
         self.pointer_gui_args = {'python_exe': self.args.get('python_path'),
                                  'cache_dir': self.args.get('cache_dir'),
-                                 'SAM_checkpoint': r'D:/track_anything_project/sam_vit_h_4b8939.pth',
+                                 'SAM_checkpoint': r'/jobs/ADGRE/ldev_pipe/nuke/Track-Anything/trackAnyThing/Track-Anything/checkpoints/sam_vit_h_4b8939.pth',
                                  'model_type': 'vit_h',
                                  'device': "cuda:0",
                                  'script_path': easy_roto_gui_path}
@@ -128,19 +128,22 @@ class MagicRotoSelector(GizmoBase):
             mask_input = self.get_init_img_path(img_name='mask_input')
             self.writeInput(mask_input, self.mask_input_node)
 
-        pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
-        post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
-
-        self.update_args()
 
         for k, v in self.args.items():
             if k in self.pointer_gui_args:
                 self.pointer_gui_args[k] = v
 
+        pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
+        post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
+        self.update_args()
+        
         # 'script_path': easy_roto_gui_path
         self.pointer_gui_args['image'] = init_img_path
         self.pointer_gui_args['ports'] = [self.mask_port, self.pointer_data_port]
         self.pointer_gui_args['script_path'] = easy_roto_gui_path
+        # self.pointer_gui_args['python_exe'] = self.python_path
+        # self.pointer_gui_args['cache_dir'] = self.cache_dir
+        # if mask_input:
         # if mask_input:
         #     self.pointer_gui_args['mask_input'] = mask_input
 
@@ -149,6 +152,8 @@ class MagicRotoSelector(GizmoBase):
         # Accept a client connection
         self.mask_server.start_accepting_clients()
         self.pointer_data_server.start_accepting_clients()
+        logger.debug(f'pre_cmd: {pre_cmd}')
+        logger.debug(f'pointer_gui_args: {self.pointer_gui_args}')
         thread = ExecuteThread(self.pointer_gui_args, None, pre_cmd, post_cmd)
         thread.start()
         self.thread_list.append(thread)

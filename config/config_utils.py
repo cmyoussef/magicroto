@@ -12,13 +12,13 @@ python_exe = python_exe if os.path.exists(python_exe) else ''
 
 home_directory = os.path.expanduser("~")
 tool_config_path = os.path.join(current_dir, "settings_config.json")
-file_path = os.path.join(home_directory, ".easyTrack_config")
+file_path = os.path.join(home_directory, ".magicRoto_config")
 
 config_dict = {}
 if os.path.exists(tool_config_path):
     with open(tool_config_path, 'r') as f:
         config_dict = json.load(f)
-        config_dict['output_dir'] = os.path.join(home_directory, "easyTrack")
+        config_dict['output_dir'] = os.path.join(home_directory, "magicRoto")
 if os.path.exists(file_path):
     with open(file_path, 'r') as f:
         config_dict.update(json.load(f))

@@ -7,7 +7,7 @@ import sys
 import numpy as np
 from PySide2 import QtWidgets, QtCore
 
-paths = [r'D:\track_anything_project']
+paths = [r'/hosts/mtlws1546/user_data/mahy/git/stash/magic-roto/src']
 for p in paths:
     if p not in sys.path:
         sys.path.insert(0, p)
