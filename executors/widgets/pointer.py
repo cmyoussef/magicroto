@@ -98,6 +98,7 @@ class PointerWindow(QtWidgets.QMainWindow):
         parser.add_argument("--device", type=str, default="cuda:0",
                             help="Device to run the model on. Default is cuda:0.")
         parser.add_argument("--mask_input", type=str, default="", help="path for a mask.")
+        parser.add_argument('--logger_level', required=False, help='the level of the logger', type=int)
         parser.add_argument("--prompts", type=str, default={}, help="preset prompts.")
         args = parser.parse_args()
         return args
@@ -177,7 +178,7 @@ if __name__ == '__main__':
     args = PointerWindow.setup_parser()
     args_dict = vars(args)
     ports = args_dict.pop('ports')
-
+    logger.setLevel(int(args_dict.get('logger_level')) or 20)
     # prompts = args_dict.get('prompts', {})
     # prompts = common_utils.get_dict_type(prompts)
     # args_dict['args'] = prompts

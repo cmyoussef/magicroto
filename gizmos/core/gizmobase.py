@@ -91,6 +91,8 @@ class GizmoBase:
         self.gizmo.end()
         self.active_read_nodes = []
         self.user_tabs = []
+        for i in range(3):
+            self.get_node(f"Read{i+1}", 'Read')
 
     @property
     def data(self):
@@ -419,8 +421,8 @@ class GizmoBase:
 
     @property
     def python_path(self):
-        cache_dir_knob = self.gizmo.knob("python_path_knob")
-        if cache_dir_knob:
+        python_path_knob = self.gizmo.knob("python_path_knob")
+        if python_path_knob:
             self._python_path = self.gizmo.knob("python_path_knob").value()
         return self._python_path
 
@@ -447,6 +449,9 @@ class GizmoBase:
     def knobChanged(self, knob):
         if knob.name() == 'controlNet_menu':
             pass
+            
+        if knob.name() == 'logger_level_menu':
+            logger.setLevel(logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20))
 
     def find_node_in_group(self, node_name):
         for node in self.gizmo.nodes():
@@ -466,7 +471,8 @@ class GizmoBase:
         return self.get_node("Output1", 'Output')
 
     def update_args(self):
-        return NotImplementedError()
+        self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
+        # return NotImplementedError()
 
     def get_output_dir(self):
         output_dir = self.gizmo.knob("output_dir").value()

@@ -115,6 +115,13 @@ class MagicRotoSelector(GizmoBase):
         self.args['python_path'] = self.python_path
         self.args['cache_dir'] = self.cache_dir
 
+        for k, v in self.args.items():
+            if k in self.pointer_gui_args:
+                self.pointer_gui_args[k] = v
+
+        self.pointer_gui_args['ports'] = [self.mask_port, self.pointer_data_port]
+        self.pointer_gui_args['script_path'] = easy_roto_gui_path
+
     def load_img(self):
 
         if not self.gizmo.input(0):
@@ -127,33 +134,24 @@ class MagicRotoSelector(GizmoBase):
         if self.gizmo.input(1):
             mask_input = self.get_init_img_path(img_name='mask_input')
             self.writeInput(mask_input, self.mask_input_node)
-
-
-        for k, v in self.args.items():
-            if k in self.pointer_gui_args:
-                self.pointer_gui_args[k] = v
-
+        
+        self.update_args()
         pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
         post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
-        self.update_args()
-        
+
         # 'script_path': easy_roto_gui_path
         self.pointer_gui_args['image'] = init_img_path
-        self.pointer_gui_args['ports'] = [self.mask_port, self.pointer_data_port]
-        self.pointer_gui_args['script_path'] = easy_roto_gui_path
+        self.pointer_gui_args['prompts'] = common_utils.get_dict_type(self.data)
         # self.pointer_gui_args['python_exe'] = self.python_path
         # self.pointer_gui_args['cache_dir'] = self.cache_dir
         # if mask_input:
         # if mask_input:
         #     self.pointer_gui_args['mask_input'] = mask_input
 
-        self.pointer_gui_args['prompts'] = common_utils.get_dict_type(self.data)
-
         # Accept a client connection
         self.mask_server.start_accepting_clients()
         self.pointer_data_server.start_accepting_clients()
-        logger.debug(f'pre_cmd: {pre_cmd}')
-        logger.debug(f'pointer_gui_args: {self.pointer_gui_args}')
+
         thread = ExecuteThread(self.pointer_gui_args, None, pre_cmd, post_cmd)
         thread.start()
         self.thread_list.append(thread)
@@ -187,7 +185,7 @@ class MagicRotoSelector(GizmoBase):
         # Make sure the knob is set to be animated
         keys.setAnimated()
         for frame in frames:
-            logger.info(f'setting {frame}')
+            logger.debug(f'setting {frame}')
             keys.setValueAt(frame, frame)
 
         self.force_evaluate_nodes()

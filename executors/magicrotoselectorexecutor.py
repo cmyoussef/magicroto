@@ -15,7 +15,7 @@ class MagicRotoSelectorExecutor:
     def __init__(self, args=None):
         self.parser: Optional[argparse.ArgumentParser] = None
         # self.setup_parser()
-
+        logger.setLevel(int(args.pop('logger_level')) or 20)
         self.args_dict: Optional[dict] = args or {}
         self.segmenter: Optional[BaseSegmenter] = None
         self.image: Optional[Image] = None
@@ -32,7 +32,7 @@ class MagicRotoSelectorExecutor:
             mode = 'both'
         self.args_dict['mode'] = mode
 
-        logger.warning(f" self.args_dict, {self.args_dict}")
+        logger.debug(f" self.args_dict, {self.args_dict}")
 
     def setup_parser(self):
         self.parser = argparse.ArgumentParser(description="Magic Roto Selector")
@@ -79,10 +79,9 @@ class MagicRotoSelectorExecutor:
 
             # Convert the channel to a numpy array
             self.mask = np.array(alpha)
-            logger.warning(f'Mask {type(self.mask)}, {self.mask.shape} {self.mask[None, :, :]}')
             self.args_dict['prompts']['mask_input'] = self.mask[None, :, :]
-        else:
-            logger.error(f'Mask Path dose not exists \n{mask_path}')
+        # else:
+        #     logger.error(f'Mask Path dose not exists \n{mask_path}')
 
     def predict(self):
         self.refine_args()

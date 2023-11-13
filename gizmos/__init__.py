@@ -163,8 +163,9 @@ def populate_toolbar(toolbar, dev_mode=False):
             cmd_module = cls.__module__
             classes_list.append(f'{cmd_module}.{cmd_name}')
             base_class = cmd_module.rsplit('.')[0]
-            m.addCommand(f'ET_{cmd_name}', f"import {base_class};{cmd_module}.{cmd_name}(name='ET_{cmd_name}')")
-            print(f"|_|_creating button ET_{cmd_name} with class {cmd_module}.{cmd_name}(name='ET_{cmd_name}')")
+            suffix = 'MR'
+            m.addCommand(f'{suffix}_{cmd_name}', f"import {base_class};{cmd_module}.{cmd_name}(name='{suffix}_{cmd_name}')")
+            print(f"|_|_creating button {suffix}_{cmd_name} with class {cmd_module}.{cmd_name}(name='{suffix}_{cmd_name}')")
         m.addSeparator()
 
     if dev_mode:
