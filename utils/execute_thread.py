@@ -34,7 +34,7 @@ class ExecuteThread(threading.Thread):
         self.callback = callback
         self.process = None
         self.pre_cmd = pre_cmd or 'echo Starting'
-        self.post_cmd = post_cmd or 'echo Done'
+        self.post_cmd = post_cmd or 'echo Excution finished'
         self._cmd = None
 
     @property

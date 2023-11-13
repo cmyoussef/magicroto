@@ -84,7 +84,13 @@ class MagicRotoSelectorExecutor:
         #     logger.error(f'Mask Path dose not exists \n{mask_path}')
 
     def predict(self):
+        
+        if not self.is_points:
+            return        
+
         self.refine_args()
+    
+    
         if self.mask is not None or self.is_points():
             self.masks, scores, logits = self.segmenter.predict(self.args_dict['prompts'],
                                                                 self.args_dict['mode'])

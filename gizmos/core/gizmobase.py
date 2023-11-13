@@ -91,8 +91,6 @@ class GizmoBase:
         self.gizmo.end()
         self.active_read_nodes = []
         self.user_tabs = []
-        for i in range(3):
-            self.get_node(f"Read{i+1}", 'Read')
 
     @property
     def data(self):
@@ -486,7 +484,8 @@ class GizmoBase:
         if nodeType is None:
             print("Node type is none and the node doesn't exists")
             return
-
+        
+        self.gizmo.begin()
         if nodeType == 'Input':
             node = nuke.nodes.Input()
 

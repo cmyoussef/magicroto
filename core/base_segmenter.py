@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import cv2
-import sys
-print(sys.version)
+
 import numpy as np
 # import svgwrite
 import torch
 from PIL import Image
 from segment_anything import sam_model_registry, SamPredictor
+from magicroto.utils.logger import logger
 
 # from mask_painter import mask_painter
 
@@ -19,7 +19,7 @@ class BaseSegmenter:
         SAM_checkpoint: path of SAM checkpoint
         model_type: vit_b, vit_l, vit_h
         """
-        print(f"Initializing BaseSegmenter to {device}")
+        logger.info(f"Initializing BaseSegmenter to {device}")
         assert model_type in ['vit_b', 'vit_l', 'vit_h'], 'model_type must be vit_b, vit_l, or vit_h'
 
         self.device = device
@@ -35,7 +35,7 @@ class BaseSegmenter:
         # image embedding: avoid encode the same image multiple times
         self.orignal_image = image
         if self.embedded:
-            print('repeat embedding, please reset_image.')
+            logger.info('repeat embedding, please reset_image.')
             return
         self.predictor.set_image(image)
         self.embedded = True

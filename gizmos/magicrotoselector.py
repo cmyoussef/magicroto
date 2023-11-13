@@ -9,7 +9,7 @@ from magicroto.config.config_utils import easy_roto_path, easy_roto_gui_path
 from magicroto.gizmos.core.gizmobase import GizmoBase
 from magicroto.utils import image_utils
 from magicroto.utils import common_utils
-from magicroto.utils.logger import logger
+from magicroto.utils.logger import logger, logger_level
 from magicroto.utils.execute_thread import ExecuteThread
 # from easytrack.gizmos.widgets.pointer import Pointer
 from magicroto.utils.icons import Icons
@@ -63,7 +63,10 @@ class MagicRotoSelector(GizmoBase):
         self.output_node.setInput(0, self.plus_merge_node)
 
         # self.mask_input_node
-
+        
+        # create the read nodes to recive the masks
+        for i in range(3):
+            self.get_node(f"Read{i+1}", 'Read')
         # End of gizmo modification
         self.gizmo.end()
 
@@ -118,7 +121,8 @@ class MagicRotoSelector(GizmoBase):
         for k, v in self.args.items():
             if k in self.pointer_gui_args:
                 self.pointer_gui_args[k] = v
-
+        
+        self.pointer_gui_args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
         self.pointer_gui_args['ports'] = [self.mask_port, self.pointer_data_port]
         self.pointer_gui_args['script_path'] = easy_roto_gui_path
 

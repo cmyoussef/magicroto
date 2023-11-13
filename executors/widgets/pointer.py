@@ -112,9 +112,14 @@ class PointerWindow(QtWidgets.QMainWindow):
             'point_coords': points,
             'point_labels': point_labels
         }
+        if not points:
+            self.pointer.clear()
+            return
+        
         self.easyRoto.args_dict['prompts'] = common_utils.get_dict_type(self.easyRoto.args_dict['prompts'])
         self.pointer_data_client.sendall(SocketServer.encode_data(prompts))
         self.easyRoto.args_dict['prompts'].update(prompts)
+        
         masks, scores, logits = self.easyRoto.predict()
         self.overlay_masks(masks)
         ack_data = self.pointer_data_client.recv(1024)  # adjust buffer size as needed
@@ -178,7 +183,13 @@ if __name__ == '__main__':
     args = PointerWindow.setup_parser()
     args_dict = vars(args)
     ports = args_dict.pop('ports')
-    logger.setLevel(int(args_dict.get('logger_level')) or 20)
+    
+    try:
+        lvl = int(args_dict.get('logger_level')) 
+    except TypeError:
+        lvl = 20
+    
+    logger.setLevel(lvl)
     # prompts = args_dict.get('prompts', {})
     # prompts = common_utils.get_dict_type(prompts)
     # args_dict['args'] = prompts

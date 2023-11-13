@@ -58,6 +58,7 @@ logger_level = {
     'notset': 0
 }
 
+logger.setLevel(20)
 # Example usage
 if __name__ == "__main__":
     logger.debug("This is a debug message.")

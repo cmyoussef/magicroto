@@ -76,13 +76,13 @@ def update_command(classes_list):
     :param classes_list: List of fully qualified class names.
     """
     toolbar = nuke.menu("Nodes")
-    sd_menu = toolbar.findItem("SD2")
+    sd_menu = toolbar.findItem("MG")
 
     if sd_menu is None:
-        print("SD2 menu not found.")
+        print("MG menu not found.")
         return
 
-    print("Updating Nuke SD2 menu:")
+    print("Updating Nuke MG menu:")
     for cls_name in classes_list:
         module_name, cmd_name = cls_name.rsplit('.', 1)
 
@@ -146,7 +146,8 @@ def populate_toolbar(toolbar, dev_mode=False):
     :param dev_mode: Bool, override build for the dev classes
     """
     full_package_name, current_path = get_current_package()
-    icon_path = os.path.join(os.path.dirname(current_path), 'icons', "sd.png")
+    icon_path = os.path.join(os.path.dirname(current_path), 'icons', "toolbar.png")
+    print(icon_path)
     m = toolbar.addMenu("MagicRoto", icon=icon_path)
     classes_dict = get_classes()
     classes_list = []

@@ -23,7 +23,7 @@ class Pointer(QtWidgets.QWidget, SingletonByNode):
         self.points = [tuple(p) for p in self.points]
         self.labels = [] if initial_labels is None else initial_labels  # Initialize with given labels or an empty list
         self.data = {'point_coords': self.points, 'point_labels': self.labels}
-        logger.warning(f'in Pointer widget {self.points}, {self.labels}')
+        logger.debug(f'in Pointer widget {self.points}, {self.labels}')
         self._canvas_width = self.MAX_WIDTH  # Default values
         self._canvas_height = self.MAX_WIDTH  # Default values
 
@@ -173,7 +173,6 @@ class Pointer(QtWidgets.QWidget, SingletonByNode):
             self.easyRoto.load_image(filepath)
 
             if all([self.points, self.labels]):
-                logger.warning('self.coordinatesChanged.emit(self.data)')
                 self.coordinatesChanged.emit(self.data)
 
 
