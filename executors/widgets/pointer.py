@@ -1,5 +1,6 @@
 import argparse
-import ast
+import os
+import inspect
 import json
 import socket
 import sys
@@ -7,10 +8,24 @@ import sys
 import numpy as np
 from PySide2 import QtWidgets, QtCore
 
-paths = [r'/hosts/mtlws1546/user_data/mahy/git/stash/magic-roto/src']
+# TODO: if it's installed with envVar you do not need that
+# <editor-fold desc="append module">
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+base_name = os.path.basename(current_dir)
+module_dir = os.path.dirname(current_dir)
+safe_brake = 0
+while safe_brake < 100:
+    base_name = os.path.basename(module_dir)
+    module_dir = os.path.dirname(module_dir)
+    if base_name == 'magicroto':
+        break
+    safe_brake += 1
+
+paths = [module_dir]
 for p in paths:
     if p not in sys.path:
         sys.path.insert(0, p)
+# </editor-fold>
 
 from magicroto.config.config_utils import config_dict
 from magicroto.config.config_utils import easy_roto_path
@@ -29,9 +44,9 @@ class PointerWindow(QtWidgets.QMainWindow):
             logger.error('invalid ports')
             self.mask_port = SocketServer.find_available_port()
             self.pointer_data_port = SocketServer.find_available_port()
-
-        self.mask_port = ports[0]
-        self.pointer_data_port = ports[1]
+        else:
+            self.mask_port = ports[0]
+            self.pointer_data_port = ports[1]
 
         self.mask_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.mask_client.connect(("localhost", self.mask_port))
@@ -115,11 +130,11 @@ class PointerWindow(QtWidgets.QMainWindow):
         if not points:
             self.pointer.clear()
             return
-        
+
         self.easyRoto.args_dict['prompts'] = common_utils.get_dict_type(self.easyRoto.args_dict['prompts'])
         self.pointer_data_client.sendall(SocketServer.encode_data(prompts))
         self.easyRoto.args_dict['prompts'].update(prompts)
-        
+
         masks, scores, logits = self.easyRoto.predict()
         self.overlay_masks(masks)
         ack_data = self.pointer_data_client.recv(1024)  # adjust buffer size as needed
@@ -159,7 +174,7 @@ class PointerWindow(QtWidgets.QMainWindow):
 def test_run():
     app = QtWidgets.QApplication([])
 
-    in_args = {'python_exe': config_dict.get('python_path'),
+    in_args = {'python_path': config_dict.get('python_path'),
                'cache_dir': config_dict.get('cache_dir'),
                'SAM_checkpoint': r'D:/track_anything_project/sam_vit_h_4b8939.pth',
                'model_type': 'vit_h',
@@ -183,12 +198,12 @@ if __name__ == '__main__':
     args = PointerWindow.setup_parser()
     args_dict = vars(args)
     ports = args_dict.pop('ports')
-    
+
     try:
-        lvl = int(args_dict.get('logger_level')) 
+        lvl = int(args_dict.get('logger_level'))
     except TypeError:
         lvl = 20
-    
+
     logger.setLevel(lvl)
     # prompts = args_dict.get('prompts', {})
     # prompts = common_utils.get_dict_type(prompts)

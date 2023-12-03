@@ -27,3 +27,4 @@ config_dict['python_path'] = config_dict.get('python_path', python_exe)
 
 easy_roto_path = os.path.join(DIR_PATH, 'executors', 'easyrotoexecutor.py')
 easy_roto_gui_path = os.path.join(DIR_PATH, 'executors', 'widgets', 'pointer.py')
+mg_selector_live_path = os.path.join(DIR_PATH, 'executors', 'mrselectorlive.py')

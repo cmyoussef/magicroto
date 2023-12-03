@@ -22,6 +22,13 @@ class SingletonMeta(type):
 
 
 class SocketServer(metaclass=SingletonMeta):
+    @classmethod
+    def get_instances(cls):
+        """
+        Returns a copy of the dictionary containing all initialized instances
+        of the SocketServer class.
+        """
+        return cls._instances.copy()
 
     @classmethod
     def encode_data(cls, data):
@@ -30,13 +37,45 @@ class SocketServer(metaclass=SingletonMeta):
         return b'data::' + payload_size + serialized_data
 
     @classmethod
-    def decode_data(cls, received_data):
-        payload_size = struct.unpack('!I', received_data[:4])[0]
-        actual_data = received_data[4:payload_size + 4]
-        return pickle.loads(actual_data)
+    def decode_data(cls, data_buffer):
+        payload_data = b""
+        payload_size = None
+
+        while True:
+            # Check for the header and split the buffer accordingly
+            if data_buffer and b'::' in data_buffer and payload_size is None:
+                header, data_buffer = data_buffer.split(b'::', 1)
+
+                if header == b'data':
+                    # Extract payload size and update the buffer
+                    payload_size = struct.unpack('!I', data_buffer[:4])[0]
+                    data_buffer = data_buffer[4:]
+
+            # Accumulate the payload data
+            if payload_size is not None:
+                payload_data += data_buffer
+                data_buffer = b""
+
+                # Check if the complete payload is received
+                if len(payload_data) >= payload_size:
+                    actual_data = payload_data[:payload_size]
+
+                    # Deserialize the actual data
+                    try:
+                        decoded_data = pickle.loads(actual_data)
+                        return decoded_data
+                    except Exception as e:
+                        # Handle deserialization error
+                        raise Exception(f"An error occurred while decoding data: {e}")
+
+            # If no complete data is received yet, break the loop
+            if not data_buffer:
+                break
+
+        # Return None or raise an error if the complete data is not received
+        return None
 
     def __init__(self, port=None, data_handler=None, host="localhost"):
-
 
         self.data_handler = data_handler
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -61,6 +100,7 @@ class SocketServer(metaclass=SingletonMeta):
         return port
 
     def start_accepting_clients(self, data_handler=None):
+        logger.info(f"Server starting on port {self.port}")
         thread = threading.Thread(target=self.accept_client, args=(data_handler,))
         thread.start()
         logger.debug(f"Starting to accept clients. on {thread}")
@@ -81,50 +121,67 @@ class SocketServer(metaclass=SingletonMeta):
         handler = data_handler if data_handler else self.data_handler  # Use passed data_handler if available
 
         while True:
-            packet = self.conn.recv(4096)
-            if not packet:
-                break
-            data_buffer += packet
+            try:
+                packet = self.conn.recv(4096)
+                if not packet:
+                    break
+                data_buffer += packet
 
-            while b'::' in data_buffer and payload_size is None:
-                header, data_buffer = data_buffer.split(b'::', 1)
-                if header == b'command':
-                    if data_buffer == b'quit':
-                        self.conn.sendall(b'ack')
-                        self.close_connection()
-                        return
-
-                elif header == b'data':
-                    payload_size = struct.unpack('!I', data_buffer[:4])[0]
-                    data_buffer = data_buffer[4:]
-
-            if payload_size is not None:
-                payload_data += data_buffer
-                data_buffer = b""
-
-                if len(payload_data) >= payload_size:
-                    actual_data = payload_data[:payload_size]
-                    decoded_data = None
-                    # First try block to check data loading
-                    try:
-                        decoded_data = pickle.loads(actual_data)
-                    except Exception as e:
-                        logger.error(f"An error occurred while decoding data: {e}")
-
-                    # Second try block to check data_handler
-                    if decoded_data is not None:
-                        try:
-                            if handler:
-                                handler(decoded_data)
-                            # Sending an acknowledgment back to the client
+                while b'::' in data_buffer and payload_size is None:
+                    header, data_buffer = data_buffer.split(b'::', 1)
+                    if header == b'command':
+                        if data_buffer == b'quit':
                             self.conn.sendall(b'ack')
-                        except Exception as e:
-                            tb = traceback.format_exc()
-                            logger.error(f"An error occurred in data_handler: {e}\n{tb}")
+                            self.close_connection()
+                            return
 
-                    data_buffer = payload_data[payload_size:]
-                    payload_data = b""
-                    payload_size = None
+                    elif header == b'data':
+                        payload_size = struct.unpack('!I', data_buffer[:4])[0]
+                        data_buffer = data_buffer[4:]
+
+                if payload_size is not None:
+                    payload_data += data_buffer
+                    data_buffer = b""
+
+                    if len(payload_data) >= payload_size:
+                        actual_data = payload_data[:payload_size]
+                        decoded_data = None
+                        # First try block to check data loading
+                        try:
+                            decoded_data = pickle.loads(actual_data)
+                        except Exception as e:
+                            logger.error(f"An error occurred while decoding data: {e}")
+
+                        # Second try block to check data_handler
+                        if decoded_data is not None:
+                            try:
+                                response_data = None
+                                if handler:
+                                    response_data = handler(decoded_data)
+                                # Sending an acknowledgment back to the client
+                                # if response_data is not None:
+                                #     encoded_response = SocketServer.encode_data(response_data)
+                                #     logger.debug(f'Sending encoded_response type:{type(response_data)}')
+                                #     self.conn.sendall(encoded_response)
+                                # else:
+                                #     self.conn.sendall(b'ack')
+                            except Exception as e:
+                                tb = traceback.format_exc()
+                                logger.error(f"An error occurred in data_handler: {e}\n{tb}")
+
+                        data_buffer = payload_data[payload_size:]
+                        payload_data = b""
+                        payload_size = None
+
+            except ConnectionResetError:
+                logger.error("Connection was closed by the client.")
+                break
+            except Exception as e:
+                logger.error(f"An unexpected error occurred: {e}")
+                break
+
+        # Clean up and close the connection
+        self.close_connection()
 
     def close_connection(self):
         logger.info("Closing the server")
@@ -134,7 +191,6 @@ class SocketServer(metaclass=SingletonMeta):
 # Sample data handler function
 def print_received_data(data):
     logger.info(f"Received mask: {data}")
-
 
 # if __name__ == '__main__':
 #     # Initialize SocketServer

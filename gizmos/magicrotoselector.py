@@ -11,7 +11,6 @@ from magicroto.utils import image_utils
 from magicroto.utils import common_utils
 from magicroto.utils.logger import logger, logger_level
 from magicroto.utils.execute_thread import ExecuteThread
-# from easytrack.gizmos.widgets.pointer import Pointer
 from magicroto.utils.icons import Icons
 from magicroto.utils.soketserver import SocketServer
 
@@ -34,9 +33,9 @@ class MagicRotoSelector(GizmoBase):
             self.args['script_path'] = easy_roto_path
             self.populate_ui()
 
-        self.pointer_gui_args = {'python_exe': self.args.get('python_path'),
+        self.pointer_gui_args = {'python_path': self.args.get('python_path'),
                                  'cache_dir': self.args.get('cache_dir'),
-                                 'SAM_checkpoint': r'/jobs/ADGRE/ldev_pipe/nuke/Track-Anything/trackAnyThing/Track-Anything/checkpoints/sam_vit_h_4b8939.pth',
+                                 'SAM_checkpoint': os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth'),
                                  'model_type': 'vit_h',
                                  'device': "cuda:0",
                                  'script_path': easy_roto_gui_path}
@@ -125,14 +124,17 @@ class MagicRotoSelector(GizmoBase):
         self.pointer_gui_args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
         self.pointer_gui_args['ports'] = [self.mask_port, self.pointer_data_port]
         self.pointer_gui_args['script_path'] = easy_roto_gui_path
+        self.pointer_gui_args['cache_dir'] = self.cache_dir
+        self.pointer_gui_args['SAM_checkpoint'] = os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth')
+        self.pointer_gui_args['python_path'] = self.python_path
 
     def load_img(self):
 
         if not self.gizmo.input(0):
-            nuke.messege("you have to connect an image")
-
+            nuke.message("you have to connect an image")
+            return
         init_img_path = self.get_init_img_path()
-        self.writeInput(init_img_path, self.input_node)
+        init_img_path = self.writeInput(init_img_path, self.input_node)
 
         mask_input = None
         if self.gizmo.input(1):
@@ -146,7 +148,7 @@ class MagicRotoSelector(GizmoBase):
         # 'script_path': easy_roto_gui_path
         self.pointer_gui_args['image'] = init_img_path
         self.pointer_gui_args['prompts'] = common_utils.get_dict_type(self.data)
-        # self.pointer_gui_args['python_exe'] = self.python_path
+        # self.pointer_gui_args['python_path'] = self.python_path
         # self.pointer_gui_args['cache_dir'] = self.cache_dir
         # if mask_input:
         # if mask_input:

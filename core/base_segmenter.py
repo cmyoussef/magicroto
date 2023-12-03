@@ -28,6 +28,7 @@ class BaseSegmenter:
         self.model.to(device=self.device)
         self.predictor = SamPredictor(self.model)
         self.embedded = False
+        logger.info(f"Successfully Initialize BaseSegmenter to {device}")
 
     @torch.no_grad()
     def set_image(self, image: np.ndarray):

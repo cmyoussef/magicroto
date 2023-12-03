@@ -21,6 +21,7 @@ class GizmoBase:
     MENU_GRP = 'generate'
     default_knobs = {}
     _initialized = False
+    frame_padding = '%04d'
 
     def __new__(cls, gizmo=None, name=None):
 
@@ -63,7 +64,7 @@ class GizmoBase:
         self._instances[self.__class__.__name__][self.gizmo.name()] = self
         self.cache_dir = config_dict.get('cache_dir', '')
         self._python_path = config_dict.get('python_path', '')
-        self.args = {'python_exe': self.python_path, 'unsupported_args': self.unsupported_args,
+        self.args = {'python_path': self.python_path, 'unsupported_args': self.unsupported_args,
                      'cache_dir': self.cache_dir}
         self.gizmo.begin()
         self.output_node.setInput(0, self.input_node)
@@ -86,6 +87,10 @@ class GizmoBase:
 
         default_knobs = self.gizmo.knob("default_knobs_knob").value()
         self.default_knobs = json.loads(default_knobs) if default_knobs else []
+
+        # knob change connection
+        cmd = f'{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("knobChanged")'
+        self.gizmo.knob('knobChanged').setValue(cmd)
 
         self.gizmo.knob('User').setFlag(nuke.INVISIBLE)
         self.gizmo.end()
@@ -398,10 +403,6 @@ class GizmoBase:
         return status_bar
 
     def set_status(self, running=False, msg=''):
-        executeBtn = self.gizmo.knob('execute_btn')
-
-        if not executeBtn:
-            return
         execute_btn = self.gizmo.knob('execute_btn')
         if running:
             if execute_btn:
@@ -444,7 +445,9 @@ class GizmoBase:
         else:
             return self.cache_dir
 
-    def knobChanged(self, knob):
+    def knobChanged(self, knob=None):
+
+        knob = knob or nuke.thisKnob()
         if knob.name() == 'controlNet_menu':
             pass
             
@@ -510,14 +513,24 @@ class GizmoBase:
                 # Check if this input of the group node has a source connected
                 return self.gizmo.input(i) is not None
 
-    def writeInput(self, outputPath, node=None, ext='png'):
+    def add_padding(self, path, ext=None):
+        base_path, current_ext = os.path.splitext(path)
+        ext = (ext or current_ext).replace('.', '')
+        base_path = base_path.replace('\\', '/')
+        path = f"{base_path}.{ext}" if f'.{self.frame_padding}.' in path else f"{base_path}.%04d.{ext}"
+        return path
+
+    def writeInput(self, outputPath, node=None, ext='png', add_padding=False):
         node = node or self.input_node
         if not self.is_connected(node):
             self.gizmo.begin()
+
         # Use a Write node to save the input image
         write_node = nuke.nodes.Write()
 
-        write_node.knob('file').setValue(outputPath.replace('\\', '/'))
+
+        outputPath = self.add_padding(outputPath, ext)
+        write_node.knob('file').setValue(outputPath)
         write_node.knob('channels').setValue('rgba')
         write_node.setInput(0, node)
 
@@ -529,6 +542,9 @@ class GizmoBase:
         nuke.execute(write_node.name(), nuke.frame(), nuke.frame())
         nuke.delete(write_node)
         self.gizmo.end()
+        if not add_padding:
+            outputPath = outputPath.replace(f'.{self.frame_padding}.', f".{nuke.frame():04d}.")
+        return outputPath
 
     def get_init_img_path(self, img_name='init_img'):
         init_img_dir = os.path.join(self.get_output_dir(), f'source_{self.__class__.__name__}')
@@ -621,7 +637,7 @@ class GizmoBase:
         self.force_evaluate_nodes()
 
     def check_files(self, files, timeout):
-        time.sleep(5)
+        time.sleep(.5)
         start_time = time.time()
         remaining_files = set(files)  # Convert list to set for efficient removal.
         while remaining_files:
@@ -634,7 +650,7 @@ class GizmoBase:
             if time.time() - start_time > timeout:
                 print("Timeout reached")
                 break
-            time.sleep(2)
+            time.sleep(.1)
 
     @staticmethod
     def disconnect_inputs(node):

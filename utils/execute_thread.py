@@ -46,7 +46,7 @@ class ExecuteThread(threading.Thread):
             return self._cmd
         # Extract necessary arguments
         args = self.args.copy()
-        python_exe = args.pop('python_exe')
+        python_exe = args.pop('python_path')
         script_path = args.pop('script_path')
 
         cmd = [python_exe, script_path]

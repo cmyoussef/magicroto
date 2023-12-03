@@ -128,6 +128,36 @@ def overlay_boolean_arrays_on_qimage(base_image: QImage, boolean_arrays, draw_co
     return image_copy
 
 
+def create_image_rgb(array_list):
+    if len(array_list) == 3:
+        # Convert each boolean array to an image channel
+        channels = [Image.fromarray((255 * np.clip(arr, 0, 1)).astype('uint8')) for arr in array_list]
+
+        # Combine the boolean arrays and create the alpha channel
+        combined_alpha = np.logical_or.reduce(array_list)
+        combined_alpha = fill_holes_in_boolean_array(combined_alpha)
+
+        # Check if the combined_alpha contains any True values
+        if not np.any(combined_alpha):
+            print("Warning: The alpha channel is completely transparent.")
+
+        alpha_channel = Image.fromarray((255 * np.clip(combined_alpha, 0, 1)).astype('uint8'))
+
+        # Merge the RGB channels and the alpha channel into an RGBA image
+        img_rgba = Image.merge("RGBA", channels + [alpha_channel])
+
+        return img_rgba
+
+    elif len(array_list) == 1:
+        # Create a grayscale image for a single array
+        arr = fill_holes_in_boolean_array(array_list[0])
+        return Image.fromarray((255 * np.clip(arr, 0, 1)).astype('uint8'), 'L')
+
+    else:
+        raise ValueError("Array list must contain 1 or 3 arrays.")
+
+
+
 def create_image(bool_array, color):
     bool_array = fill_holes_in_boolean_array(bool_array)
     rows, cols = len(bool_array), len(bool_array[0])

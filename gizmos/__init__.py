@@ -95,7 +95,49 @@ def update_command(classes_list):
             print(f"|_|_updating command {full_cmd_name} to {new_command}")
 
 
+def find_package_classes(package_name):
+    """
+    Finds and lists all classes that can be imported from a given package.
+
+    :param package_name: Name of the package to inspect.
+    :return: Dictionary of classes keyed by module and class name.
+    """
+    def scan_directory_for_modules(directory, base_package):
+        modules = []
+        for root, dirs, files in os.walk(directory):
+            package_path = root.replace(directory, '').replace(os.sep, '.')
+            for file in files:
+                if file.endswith('.py') and not file.startswith('__'):
+                    module_name = f"{base_package}{package_path}.{file[:-3]}"
+                    modules.append(module_name)
+        return modules
+
+    def list_classes_from_modules(modules):
+        all_classes = {}
+        for module_name in modules:
+            try:
+                module = importlib.import_module(module_name)
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+                    if isinstance(attr, type):
+                        all_classes[f"{module_name}.{attr_name}"] = attr
+            except ModuleNotFoundError:
+                pass
+        return all_classes
+
+    package_spec = importlib.util.find_spec(package_name)
+    if not package_spec or not package_spec.origin:
+        raise ImportError(f"Package '{package_name}' is not found")
+
+    package_directory = os.path.dirname(package_spec.origin)
+    modules = scan_directory_for_modules(package_directory, package_name)
+    all_classes = list_classes_from_modules(modules)
+
+    return all_classes
+
+
 def reload_classes(classes_list):
+
     classes_list = ast.literal_eval(classes_list)
     unique_modules = set()
     base_modules = set()
@@ -130,10 +172,13 @@ def reload_classes(classes_list):
     print('-' * 10)
 
     for module_name in sorted_modules:
-        print(f"Reloading {module_name}")
-        importlib.import_module(module_name)
-        if module_name in sys.modules:
-            importlib.reload(sys.modules[module_name])
+        try:
+            print(f"Reloading {module_name}")
+            importlib.import_module(module_name)
+            if module_name in sys.modules:
+                importlib.reload(sys.modules[module_name])
+        except ModuleNotFoundError:
+            pass
     print('-' * 10)
     update_command(classes_list)
 
@@ -154,6 +199,7 @@ def populate_toolbar(toolbar, dev_mode=False):
 
     # Populate the menu with commands for each class
     print("Loading MagicRoto toolbar:")
+    base_modules = []
     for group, gizmos in classes_dict.items():
         print(f'|_Populating {group}')
         for g in gizmos:
@@ -164,11 +210,16 @@ def populate_toolbar(toolbar, dev_mode=False):
             cmd_module = cls.__module__
             classes_list.append(f'{cmd_module}.{cmd_name}')
             base_class = cmd_module.rsplit('.')[0]
+            base_modules.append(base_class)
             suffix = 'MR'
             m.addCommand(f'{suffix}_{cmd_name}', f"import {base_class};{cmd_module}.{cmd_name}(name='{suffix}_{cmd_name}')")
             print(f"|_|_creating button {suffix}_{cmd_name} with class {cmd_module}.{cmd_name}(name='{suffix}_{cmd_name}')")
         m.addSeparator()
 
+    for package_name in list(set(base_modules)):
+        classes_list.extend(find_package_classes(package_name))
+
+    classes_list = list(set(classes_list))
     if dev_mode:
         # Add reload command to the menu
         m.addCommand('Reload modules', f'{full_package_name}.reload_classes("{classes_list}")')
