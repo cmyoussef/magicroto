@@ -131,20 +131,18 @@ def overlay_boolean_arrays_on_qimage(base_image: QImage, boolean_arrays, draw_co
 def create_image_rgb(array_list):
     if len(array_list) == 3:
         # Convert each boolean array to an image channel
-        channels = [Image.fromarray((255 * np.clip(arr, 0, 1)).astype('uint8')) for arr in array_list]
+        rgb_channels = [255 * np.clip(arr, 0, 1) for arr in array_list]
 
-        # Combine the boolean arrays and create the alpha channel
+        # Combine the boolean arrays to create the alpha channel
         combined_alpha = np.logical_or.reduce(array_list)
         combined_alpha = fill_holes_in_boolean_array(combined_alpha)
+        alpha_channel = 255 * np.clip(combined_alpha, 0, 1)
 
-        # Check if the combined_alpha contains any True values
-        if not np.any(combined_alpha):
-            print("Warning: The alpha channel is completely transparent.")
+        # Stack the channels to form a 4-channel (RGBA) array
+        rgba_array = np.stack((*rgb_channels, alpha_channel), axis=-1).astype('uint8')
 
-        alpha_channel = Image.fromarray((255 * np.clip(combined_alpha, 0, 1)).astype('uint8'))
-
-        # Merge the RGB channels and the alpha channel into an RGBA image
-        img_rgba = Image.merge("RGBA", channels + [alpha_channel])
+        # Convert the NumPy array to a PIL image
+        img_rgba = Image.fromarray(rgba_array, 'RGBA')
 
         return img_rgba
 

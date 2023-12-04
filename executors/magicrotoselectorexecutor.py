@@ -56,9 +56,11 @@ class MagicRotoSelectorExecutor:
 
     def load_image(self, image_path=None):
         image_path = image_path or self.args_dict['image']
+        self.args_dict['image'] = image_path
         self.image = Image.open(image_path)
+        self.segmenter.reset_image()
         self.segmenter.set_image(np.array(self.image))
-        logger.info(f'Setting Image << {image_path}')
+        logger.info(f'Setting Image << {image_path}, {self.image}')
         return self.image
 
     def load_mask(self, mask_path=None):
@@ -92,7 +94,6 @@ class MagicRotoSelectorExecutor:
         self.refine_args()
 
         if self.mask is not None or self.is_points():
-            logger.warning(f"self.args_dict['prompts']: {self.args_dict['prompts']}, {self.image}")
             self.masks, scores, logits = self.segmenter.predict(self.args_dict['prompts'],
                                                                 self.args_dict['mode'])
             return self.masks, scores, logits
@@ -122,13 +123,3 @@ if __name__ == "__main__":
 
     easyRoto.predict()
     logger.info(f'Output is generated.')
-    # Main loop to keep the script running
-    try:
-        while True:
-            # Sleep to prevent the loop from consuming CPU resources
-
-            time.sleep(10)
-    except KeyboardInterrupt:
-        # Handle graceful shutdown on interrupt (Ctrl+C)
-        logger.info("Shutting down server...")
-        # Implement any necessary cleanup or shutdown procedures here

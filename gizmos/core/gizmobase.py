@@ -520,6 +520,15 @@ class GizmoBase:
         path = f"{base_path}.{ext}" if f'.{self.frame_padding}.' in path else f"{base_path}.%04d.{ext}"
         return path
 
+    @property
+    def frame_range(self):
+        if self.gizmo.knob('use_frame_range_knobs').value():
+            start_frame = self.gizmo.knob('first_frame_knob').value()
+            end_frame = self.gizmo.knob('last_frame_knob').value()
+        else:
+            start_frame = end_frame = nuke.frame()
+        return int(start_frame), int(end_frame)
+
     def writeInput(self, outputPath, node=None, ext='png', add_padding=False):
         node = node or self.input_node
         if not self.is_connected(node):
@@ -527,8 +536,6 @@ class GizmoBase:
 
         # Use a Write node to save the input image
         write_node = nuke.nodes.Write()
-
-
         outputPath = self.add_padding(outputPath, ext)
         write_node.knob('file').setValue(outputPath)
         write_node.knob('channels').setValue('rgba')
@@ -536,12 +543,17 @@ class GizmoBase:
 
         # Set the file_type and datatype
         write_node.knob('file_type').setValue(ext)
-        write_node.knob('datatype').setValue('8 bit')
+
+        # write_node.knob('datatype').setValue('8 bit')
+        logger.warning(outputPath)
+
 
         # Execute the Write node
-        nuke.execute(write_node.name(), nuke.frame(), nuke.frame())
+        start_frame, end_frame = self.frame_range
+        nuke.execute(write_node.name(), start_frame, end_frame)
         nuke.delete(write_node)
         self.gizmo.end()
+
         if not add_padding:
             outputPath = outputPath.replace(f'.{self.frame_padding}.', f".{nuke.frame():04d}.")
         return outputPath

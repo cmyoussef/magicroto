@@ -37,6 +37,7 @@ class MagicRotoSelectorLive:
 
     def __init__(self, args):
 
+        self.current_frame = None
         self.args = args.copy()
         ports = args.pop('ports')
         if ports is None:
@@ -45,13 +46,14 @@ class MagicRotoSelectorLive:
         else:
             self.mask_port = ports[0]
 
-        self.mask_server = SocketServer(port=self.mask_port, data_handler=self.on_points_changed)
         logger.info(f"Creating server at {self.mask_port}")
+        self.mask_server = SocketServer(port=self.mask_port, data_handler=self.on_points_changed)
+        self.mask_server.start_accepting_clients()
 
         self.easyRoto = MagicRotoSelectorExecutor(args)
         self.segmenter = self.easyRoto.create_segmenter()
         self.easyRoto.load_image(args['image'])
-        self.mask_server.start_accepting_clients()
+        logger.info(f"Ready to use server at {self.mask_port}")
 
     @classmethod
     def setup_parser(cls):
@@ -71,48 +73,27 @@ class MagicRotoSelectorLive:
         return args
 
     def on_points_changed(self, data):
+        frame = f'{data.get("frame", 1001):04d}'
+
+        init_img_path = data.get('init_img_path', None)
+        if init_img_path is not None:
+            init_img_path = init_img_path.replace('.%04d.', f'.{frame}.')
+            # logger.warning(f'init_img_path << {init_img_path}')
+            if init_img_path and os.path.isfile(init_img_path):
+                if not self.current_frame or self.current_frame != frame:
+                    self.easyRoto.load_image(init_img_path)
+                    self.current_frame = frame
+                    # time.sleep(1)
 
         self.easyRoto.args_dict['prompts'] = common_utils.get_dict_type(data['prompts'])
-        # self.easyRoto.load_image(r'C:/Users/mellithy/Downloads/5eaeab055785321b3858e963.jpg')
-        logger.debug(f"{'*'*10}\n{data['prompts']} vs {self.easyRoto.args_dict['prompts']}")
         masks, scores, logits = self.easyRoto.predict()
 
-        img = self.create_image_rgb(masks)
-        frame = f'{data.get("frame", 1001):04d}'
+        img = image_utils.create_image_rgb(masks)
+
         out_img = self.args['output_path'].replace('.%04d.', f'.{frame}.')
         img.save(out_img)
         logger.info(f'Images saved {out_img}')
         return masks
-
-    @staticmethod
-    def create_image_rgb(array_list):
-        from PIL import Image
-        import numpy as np
-        if len(array_list) == 3:
-            # Process each array and create an RGB image
-            channels = []
-            for arr in array_list:
-                arr = image_utils.fill_holes_in_boolean_array(arr)
-                rows, cols = arr.shape
-                img = Image.new('L', (cols, rows))  # 'L' mode for grayscale
-                pixels = img.load()
-
-                for row in range(rows):
-                    for col in range(cols):
-                        # Set pixel intensity to 255 if True, else 0
-                        pixels[col, row] = 255 if arr[row, col] else 0
-
-                channels.append(img)
-
-            return Image.merge("RGB", channels)
-
-        elif len(array_list) == 1:
-            # Convert the array to uint8 and create a grayscale image
-            arr = image_utils.fill_holes_in_boolean_array(array_list[0])
-            return Image.fromarray((255 * np.clip(arr, 0, 1)).astype('uint8'))
-
-        else:
-            raise ValueError("Array list must contain 1 or 3 arrays.")
 
 
 if __name__ == '__main__':
@@ -124,19 +105,20 @@ if __name__ == '__main__':
     except TypeError:
         lvl = 20
 
-    args_dict['image'] = r'C:/Users/mellithy/Downloads/5eaeab055785321b3858e963.jpg'
+    # args_dict['image'] = r'C:/Users/mellithy/Downloads/5eaeab055785321b3858e963.jpg'
     logger.setLevel(lvl)
 
     logger.info(f"Pars args {args_dict}")
 
     mrSelectorLive = MagicRotoSelectorLive(args=args_dict)
     # Main loop to keep the script running
-    try:
-        while True:
-            # Sleep to prevent the loop from consuming CPU resources
-            logger.debug(f'mrselectorlive still running {mrSelectorLive.mask_server.conn}')
-            time.sleep(10)
-    except KeyboardInterrupt:
-        # Handle graceful shutdown on interrupt (Ctrl+C)
-        logger.info("Shutting down server...")
-        # Implement any necessary cleanup or shutdown procedures here
+    # try:
+    #     while True:
+    #         # Sleep to prevent the loop from consuming CPU resources
+    #         msg = mrSelectorLive.mask_server.conn if hasattr(mrSelectorLive.mask_server, 'conn') else mrSelectorLive.mask_server
+    #         logger.debug(f'mrselectorlive still running {msg}')
+    #         time.sleep(10)
+    # except KeyboardInterrupt:
+    #     # Handle graceful shutdown on interrupt (Ctrl+C)
+    #     logger.info("Shutting down server...")
+    #     # Implement any necessary cleanup or shutdown procedures here
