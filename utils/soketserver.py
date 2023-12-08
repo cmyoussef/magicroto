@@ -164,7 +164,7 @@ class SocketServer(metaclass=SingletonMeta):
                                 #     logger.debug(f'Sending encoded_response type:{type(response_data)}')
                                 #     self.conn.sendall(encoded_response)
                                 # else:
-                                #     self.conn.sendall(b'ack')
+                                    self.conn.sendall(b'ack')
                             except Exception as e:
                                 tb = traceback.format_exc()
                                 logger.error(f"An error occurred in data_handler: {e}\n{tb}")

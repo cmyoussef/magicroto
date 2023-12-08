@@ -4,6 +4,7 @@ import os.path
 from typing import Optional
 
 import numpy as np
+import torchvision.transforms as transforms
 from PIL import Image
 
 from magicroto.core.base_segmenter import BaseSegmenter
@@ -57,11 +58,32 @@ class MagicRotoSelectorExecutor:
     def load_image(self, image_path=None):
         image_path = image_path or self.args_dict['image']
         self.args_dict['image'] = image_path
-        self.image = Image.open(image_path)
+        img = Image.open(image_path).convert("RGB")
+        # img = self.ensure_BCHW(img)
+        self.image = img
         self.segmenter.reset_image()
         self.segmenter.set_image(np.array(self.image))
         logger.info(f'Setting Image << {image_path}, {self.image}')
         return self.image
+
+    def ensure_BCHW(self, image):
+        # Determine the resizing scale
+        long_side = max(image.size)
+        scale = 1024 / long_side
+
+        # Calculate new size, keeping aspect ratio
+        new_size = (int(image.size[0] * scale), int(image.size[1] * scale))
+
+        # Resize the image
+        image = image.resize(new_size, Image.Resampling.LANCZOS).convert("RGB")
+        return image
+        # Transform to tensor
+        to_tensor = transforms.ToTensor()
+        image_tensor = to_tensor(image)
+
+        print(image_tensor.shape)
+        # Add a batch dimension
+        return image_tensor
 
     def load_mask(self, mask_path=None):
 
@@ -111,7 +133,6 @@ class MagicRotoSelectorExecutor:
 
 
 if __name__ == "__main__":
-    import time
     easyRoto = MagicRotoSelectorExecutor()
     logger.info(f'Initialize the EasyRoto')
 

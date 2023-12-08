@@ -340,6 +340,7 @@ class MagicRotoSelectorLive(GizmoBase):
         if nuke.thisNode() == self.gizmo:
             self.close_server()
 
+
 if __name__ == '__main__':
     # Create a NoOp node on which we'll add the knobs
     node = MagicRotoSelectorLive()

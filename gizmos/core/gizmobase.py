@@ -522,7 +522,8 @@ class GizmoBase:
 
     @property
     def frame_range(self):
-        if self.gizmo.knob('use_frame_range_knobs').value():
+        use_frame_range_knob = self.gizmo.knob('use_frame_range_knobs')
+        if use_frame_range_knob and use_frame_range_knob.value():
             start_frame = self.gizmo.knob('first_frame_knob').value()
             end_frame = self.gizmo.knob('last_frame_knob').value()
         else:
