@@ -20,6 +20,8 @@ class Icons:
     load_symbol = u'\U0001F4C1'  # 📁
     tractor_symbol = u'\U0001F69C'  # 🚜
     launch_gui_symbol = u'\U0001F680'  # 🚀
+    explosion_symbol = u'\U0001F4A5'  # 💥
+    disconnect_symbol = u'\U0001F50C'  # 🔌
     search_symbol = u'\U0001F50D'  # 🔍
     settings_symbol = u'\U00002699\ufe0f'  # ⚙️
     info_symbol = u'\U00002139\ufe0f'  # ℹ️

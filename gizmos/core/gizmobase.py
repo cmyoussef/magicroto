@@ -44,6 +44,7 @@ class GizmoBase:
         return instance
 
     def __init__(self, gizmo=None, name=None):
+
         logger.debug('run __init__')
         if gizmo:
             self.gizmo = nuke.toNode(gizmo)
@@ -59,7 +60,7 @@ class GizmoBase:
         if self._initialized:
             logger.debug('\t stop init')
             return
-
+        self.is_client_connected = None
         self.mask_client = None
         self.thread_list = []
         self.base_class = self.__module__.rsplit('.')[0]
@@ -134,18 +135,22 @@ class GizmoBase:
             self.mask_client.setblocking(False)
             self.is_client_connected = True
             logger.info(f"Successfully connected to server at port {self.main_port}")
-            nuke.executeInMainThread(self.set_status, args=(True, f"Successfully connected to server at port {self.main_port}",))
+            nuke.executeInMainThread(self.set_status,
+                                     args=(True, f"Successfully connected to server at port {self.main_port}",))
             # self.set_status(True, f"Successfully connected to server at port {self.main_port}")
             return True
 
         except ConnectionRefusedError:
             logger.warning(f"Connection to server at port {self.main_port} refused.")
-            self.mask_client.close()
+            if self.mask_client is not None:
+                self.mask_client.close()
             self.is_client_connected = False
             return False
 
         except Exception as e:
             logger.error(f"Error while connecting: {e}")
+            if self.mask_client is not None:
+                self.mask_client.close()
             self.is_client_connected = False
             return False
 
@@ -464,12 +469,31 @@ class GizmoBase:
     def main_port(self, port):
         port_knob = self.gizmo.knob('port_knob')
         if port_knob:
-            port_knob.setValue(int(port))
+            set_port_value = lambda: port_knob.setValue(int(port))
+            nuke.executeInMainThread(set_port_value)
 
     def find_available_port_knob(self):
         port_knob = self.gizmo.knob('port_knob')
         if port_knob:
             port_knob.setValue(SocketServer.find_available_port())
+
+    def reload_button(self):
+        reload_btn = self.gizmo.knob('reload_btn_knob')
+        if not reload_btn:
+            reload_btn = nuke.PyScript_Knob('reload_btn_knob', f'Reload {Icons.refresh_symbol}')
+            reload_btn.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(reload_btn)
+        reload_btn.setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("reload_read_nodes")')
+        return reload_btn
+
+    def reload_read_nodes(self):
+        for n in self.gizmo.nodes():
+            # Check if the current node is a Read node
+            if n.Class() == 'Read':
+                # Reload the Read node
+                n['reload'].execute()
+        self.force_evaluate_nodes()
 
     def create_generate_knobs(self):
         self.create_generate_tab()
@@ -489,19 +513,25 @@ class GizmoBase:
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("find_available_port_knob")')
 
         if not self.gizmo.knob('start_server'):
-            cn_button = nuke.PyScript_Knob('start_server', f'Start server{Icons.launch_gui_symbol}')
+            cn_button = nuke.PyScript_Knob('start_server', f'Start{Icons.launch_gui_symbol}')
             cn_button.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(cn_button)
         self.gizmo.knob('start_server').setCommand(
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("ensure_server_connection")')
 
         if not self.gizmo.knob('connect_to_server'):
-            cn_button = nuke.PyScript_Knob('connect_to_server', f'Connect to server{Icons.link_symbol}')
+            cn_button = nuke.PyScript_Knob('connect_to_server', f'Connect{Icons.link_symbol}')
             # cn_button.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(cn_button)
         self.gizmo.knob('connect_to_server').setCommand(
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("attempt_reconnect")')
 
+        if not self.gizmo.knob('close_server'):
+            cn_button = nuke.PyScript_Knob('close_to_server', f'Close{Icons.link_symbol}')
+            # cn_button.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(cn_button)
+        self.gizmo.knob('connect_to_server').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("attempt_reconnect")')
 
         # if not self.gizmo.knob('use_external_execute'):
         #     use_external_execute = nuke.Boolean_Knob('use_external_execute', f'Use Farm {Icons.tractor_symbol}')
@@ -517,7 +547,7 @@ class GizmoBase:
         #     f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_execute")')
 
         if not self.gizmo.knob('interrupt_btn'):
-            interrupt_btn = nuke.PyScript_Knob('interrupt_btn', f'Force terminate servers {Icons.interrupt_symbol}')
+            interrupt_btn = nuke.PyScript_Knob('interrupt_btn', f'Force terminate All{Icons.explosion_symbol}')
             interrupt_btn.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(interrupt_btn)
         self.gizmo.knob('interrupt_btn').setCommand(

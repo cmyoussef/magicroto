@@ -81,6 +81,10 @@ class SocketServer(metaclass=SingletonMeta):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
+        # Stores client threads and connections
+        self.client_threads = {}
+        self.client_connections = {}
+
         if port:
             self.port = port
         else:
@@ -107,13 +111,22 @@ class SocketServer(metaclass=SingletonMeta):
 
     def accept_client(self, data_handler=None, return_response_data=False):
         logger.debug("Inside accept_client.")
-        self.conn, self.addr = self.server_socket.accept()
-        logger.debug(f"Accepted connection from {self.addr}.")
-        thread = threading.Thread(target=self.receive_data, args=(data_handler, return_response_data,))
-        thread.start()
+        while True:
+            conn, addr = self.server_socket.accept()
+            logger.debug(f"Accepted connection from {addr}.")
 
-    def receive_data(self, data_handler=None, return_response_data=False):
-        logger.debug("Inside receive_data.")
+            # Store the client connection
+            self.client_connections[addr] = conn
+
+            # Start a new thread for each client
+            thread = threading.Thread(target=self.receive_data, args=(conn, addr, data_handler, return_response_data,))
+            thread.start()
+
+            # Store the thread
+            self.client_threads[addr] = thread
+
+    def receive_data(self, conn, addr, data_handler=None, return_response_data=False):
+        logger.debug(f"Inside receive_data for {addr}.")
 
         data_buffer = b""
         payload_data = b""
@@ -122,7 +135,7 @@ class SocketServer(metaclass=SingletonMeta):
 
         while True:
             try:
-                packet = self.conn.recv(4096)
+                packet = conn.recv(4096)
                 if not packet:
                     break
                 data_buffer += packet
@@ -131,8 +144,8 @@ class SocketServer(metaclass=SingletonMeta):
                     header, data_buffer = data_buffer.split(b'::', 1)
                     if header == b'command':
                         if data_buffer == b'quit':
-                            self.conn.sendall(b'ack')
-                            self.close_connection()
+                            conn.sendall(b'ack')
+                            self.close_connection(addr)
                             return
 
                     elif header == b'data':
@@ -163,9 +176,9 @@ class SocketServer(metaclass=SingletonMeta):
                                 if response_data is not None and return_response_data:
                                     encoded_response = SocketServer.encode_data(response_data)
                                     logger.debug(f'Sending encoded_response type:{type(response_data)}')
-                                    self.conn.sendall(encoded_response)
+                                    conn.sendall(encoded_response)
                                 else:
-                                    self.conn.sendall(b'ack')
+                                    conn.sendall(b'ack')
                             except Exception as e:
                                 tb = traceback.format_exc()
                                 logger.error(f"An error occurred in data_handler: {e}\n{tb}")
@@ -182,11 +195,14 @@ class SocketServer(metaclass=SingletonMeta):
                 break
 
         # Clean up and close the connection
-        self.close_connection()
+        self.close_connection(addr)
 
-    def close_connection(self):
-        logger.info("Closing the server")
-        self.conn.close()
+    def close_connection(self, addr):
+        logger.info(f"Closing connection with {addr}")
+        if addr in self.client_connections:
+            self.client_connections[addr].close()
+            del self.client_connections[addr]
+            del self.client_threads[addr]
 
 
 # Sample data handler function

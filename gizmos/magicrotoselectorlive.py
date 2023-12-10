@@ -190,6 +190,7 @@ class MagicRotoSelectorLive(GizmoBase):
 
             grade_node['multiply'].setExpression(f"{knobName}", i-1)
 
+        self.reload_button()
 
         status_bar = self.status_bar
         self.set_status(running=False)
