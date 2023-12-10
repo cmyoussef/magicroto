@@ -198,12 +198,12 @@ class SocketServer(metaclass=SingletonMeta):
         self.close_connection(addr)
 
     def close_connection(self, addr):
-        logger.info(f"Closing connection with {addr}")
+        logger.debug(f"Closing connection with {addr}")
         if addr in self.client_connections:
             self.client_connections[addr].close()
             del self.client_connections[addr]
             del self.client_threads[addr]
-
+            logger.info(f"Server is closed {addr}")
 
 # Sample data handler function
 def print_received_data(data):

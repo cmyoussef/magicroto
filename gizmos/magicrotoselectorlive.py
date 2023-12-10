@@ -11,9 +11,7 @@ from magicroto.config.config_utils import mg_selector_live_path
 from magicroto.gizmos.core.gizmobase import GizmoBase
 from magicroto.utils import common_utils
 from magicroto.utils.icons import Icons
-from magicroto.utils.execute_thread import ExecuteThread
-
-from magicroto.utils.logger import logger, logger_level
+from magicroto.utils.logger import logger
 from magicroto.utils.soketserver import SocketServer
 
 
@@ -23,7 +21,7 @@ class MagicRotoSelectorLive(GizmoBase):
         super().__init__(gizmo=node, name=name)
 
         self.knob_change_timer = None
-        self.last_knob_value = None
+        self.last_knob_value = {}
 
         # Variable to store the image
         if not self._initialized:
@@ -69,7 +67,6 @@ class MagicRotoSelectorLive(GizmoBase):
 
         self.points = []
         self.counter = 0
-        nuke.addOnDestroy(self.on_destroy)
 
     def add_gradient_and_expression(self):
         # Clear selection
@@ -128,33 +125,6 @@ class MagicRotoSelectorLive(GizmoBase):
         self.create_generate_tab()
         super().create_generate_knobs()
 
-        # region frame rang
-        if not self.gizmo.knob('first_frame_knob'):
-            first_frame_knob = nuke.Int_Knob('first_frame_knob', ' ')
-            nuke.root().knob('first_frame').value()
-            first_frame_knob.setFlag(nuke.STARTLINE)
-            # first_frame_knob.setFlag(nuke.DISABLED)
-            first_frame_knob.setValue(int(nuke.root().knob('first_frame').value()))
-            self.gizmo.addKnob(first_frame_knob)
-
-        if not self.gizmo.knob('last_frame_knob'):
-            end_frame_knob = nuke.Int_Knob('last_frame_knob', ' ')
-            end_frame_knob.clearFlag(nuke.STARTLINE)
-            # end_frame_knob.setFlag(nuke.DISABLED)
-            end_frame_knob.setValue(int(nuke.root().knob('last_frame').value()))
-            self.gizmo.addKnob(end_frame_knob)
-
-        if not self.gizmo.knob('frame_range_label_knob'):
-            frame_range_label_knob = nuke.Text_Knob('frame_range_label_knob', 'Frame Range')
-            frame_range_label_knob.clearFlag(nuke.STARTLINE)
-            self.gizmo.addKnob(frame_range_label_knob)
-
-        # if not self.gizmo.knob('use_frame_range_knobs'):
-        #     use_frame_range_knobs = nuke.Boolean_Knob('use_frame_range_knobs',
-        #                                               f'{Icons.video_symbol} Use frame range')
-        #     use_frame_range_knobs.clearFlag(nuke.STARTLINE)
-        #     self.gizmo.addKnob(use_frame_range_knobs)
-        # endregion
         self.add_divider('Trackers')
 
         if not self.gizmo.knob('track_01'):
@@ -178,7 +148,7 @@ class MagicRotoSelectorLive(GizmoBase):
         channels = ['red', 'green', 'blue']
         for i in range(1, 4):
             knobLabel = '{:02d}'.format(i)
-            knobLabel = 'RGB'[i-1]
+            knobLabel = 'RGB'[i - 1]
             knobName = f'mask_{knobLabel}_knob'
             msk_knob = self.gizmo.knob(knobName)
             if not msk_knob:
@@ -188,40 +158,143 @@ class MagicRotoSelectorLive(GizmoBase):
                     msk_knob.setFlag(nuke.STARTLINE)
                 msk_knob.setValue(1)
 
-            grade_node['multiply'].setExpression(f"{knobName}", i-1)
+            grade_node['multiply'].setExpression(f"{knobName}", i - 1)
+
+        # region frame range
+        self.add_divider('Trackers')
+
+        if not self.gizmo.knob('first_frame_knob'):
+            first_frame_knob = nuke.Int_Knob('first_frame_knob', ' ')
+            nuke.root().knob('first_frame').value()
+            first_frame_knob.setFlag(nuke.STARTLINE)
+            # first_frame_knob.setFlag(nuke.DISABLED)
+            first_frame_knob.setValue(int(nuke.root().knob('first_frame').value()))
+            self.gizmo.addKnob(first_frame_knob)
+
+        if not self.gizmo.knob('last_frame_knob'):
+            end_frame_knob = nuke.Int_Knob('last_frame_knob', ' ')
+            end_frame_knob.clearFlag(nuke.STARTLINE)
+            # end_frame_knob.setFlag(nuke.DISABLED)
+            end_frame_knob.setValue(int(nuke.root().knob('last_frame').value()))
+            self.gizmo.addKnob(end_frame_knob)
+
+        if not self.gizmo.knob('frame_range_label_knob'):
+            frame_range_label_knob = nuke.Text_Knob('frame_range_label_knob', 'Frame Range')
+            frame_range_label_knob.clearFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(frame_range_label_knob)
+
+        if not self.gizmo.knob('cache_frame_btn_knob'):
+            cn_button = nuke.PyScript_Knob('cache_frame_btn_knob', f'Cache input {Icons.download_symbol}')
+            cn_button.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(cn_button)
+        self.gizmo.knob('cache_frame_btn_knob').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("cache_input")')
+
+        if not self.gizmo.knob('segment_sequence_btn_knob'):
+            cn_button = nuke.PyScript_Knob('segment_sequence_btn_knob', f'Segment Sequence {Icons.execute_symbol}')
+            cn_button.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(cn_button)
+        self.gizmo.knob('segment_sequence_btn_knob').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("segment_sequence")')
+        # endregion
+
+        # if not self.gizmo.knob('use_frame_range_knobs'):
+        #     use_frame_range_knobs = nuke.Boolean_Knob('use_frame_range_knobs',
+        #                                               f'{Icons.video_symbol} Use frame range')
+        #     use_frame_range_knobs.clearFlag(nuke.STARTLINE)
+        #     self.gizmo.addKnob(use_frame_range_knobs)
+        # endregion
 
         self.reload_button()
 
         status_bar = self.status_bar
         self.set_status(running=False)
 
+    def get_prompt_data(self):
+
+        prompt_data = {}
+        for knob_name, knob in self.gizmo.knobs().items():
+            # Check if 'track_' is in the knob name
+            if 'track_' in knob_name:
+                xy = int(knob.value()[0]), int(knob.value()[1])
+                prompt_data[knob_name] = (xy, not knob_name.endswith('_neg'))
+        return prompt_data
+
+    def segment_sequence(self):
+        init_img_path = self.get_init_img_path()
+        init_img_path_padding = self.add_padding(init_img_path)
+        multi_frame_data = {}
+        start_frame, end_frame = self.frame_range
+        for i in range(start_frame, end_frame+1):
+            existing_file = init_img_path_padding.replace(f'.{self.frame_padding}.', f".{i:04d}.")
+            nuke.frame(i)
+            if not os.path.exists(existing_file):
+                self.writeInput(init_img_path, self.input_node, frame_range=(i, i))
+
+            y_shift = Image.open(existing_file).height
+            prompt_data = self.get_prompt_data()
+            prompts = {}
+            for k, (point_coord, point_label) in prompt_data.items():
+                point_coord = int(point_coord[0]), y_shift - int(point_coord[1])
+                prompts.setdefault('point_coords', []).append(point_coord)
+                prompts.setdefault('point_labels', []).append(1 if point_label else 0)
+            frame_data = {
+                'use_xy': True,
+                'output_path': self.output_file_path,
+                'frame': i,
+                'init_img_path': init_img_path_padding,
+                'prompts': prompts
+                }
+
+            multi_frame_data[i] = frame_data
+
+        self.attempt_to_send(multi_frame_data)
+
+        file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
+        self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
+
+    def cache_input(self):
+        init_img_path = self.get_init_img_path()
+        self.writeInput(init_img_path, self.input_node, frame_range=self.frame_range)
+        logger.info(f"cache images updates, {init_img_path}")
+
+    def check_last_knob_value(self, xy, knob_name):
+        if knob_name not in self.last_knob_value:
+            return True
+        else:
+            return xy != self.last_knob_value[knob_name][0]
+
     def knobChanged(self, knob=None):
 
         knob = knob or nuke.thisKnob()
-
-        if knob.name() in ['track_01', 'frame']:
+        send_call = [False]
+        if 'track_' in knob.name() and self.mask_client:
             xy = int(knob.value()[0]), int(knob.value()[1])
             # Check if the value has changed
-            if xy != self.last_knob_value:
+            if self.check_last_knob_value(xy, knob.name()):
                 # Update the last known value
-                self.last_knob_value = xy
+                self.last_knob_value[knob.name()] = (xy, not knob.name().endswith('_neg'))
+                send_call.append(True)
 
-                # Cancel the existing timer if it's running
-                if self.knob_change_timer is not None:
-                    self.knob_change_timer.cancel()
+        if any(send_call):
+            # Cancel the existing timer if it's running
+            if self.knob_change_timer is not None:
+                self.knob_change_timer.cancel()
 
-                # Create a new timer
-                self.knob_change_timer = threading.Timer(0.5, self.on_points_changed, args=(xy,))
-                self.knob_change_timer.start()
+            # Create a new timer
+            self.knob_change_timer = threading.Timer(0.5, self.on_points_changed)
+            self.knob_change_timer.start()
 
         super().knobChanged(knob)
 
-    def on_points_changed(self, xy_points):
+    def on_points_changed(self):
 
         init_img_path = self.get_init_img_path()
         init_img_path_padding = self.add_padding(init_img_path)
         existing_file = init_img_path_padding.replace(f'.{self.frame_padding}.', f".{nuke.frame():04d}.")
+        logger.debug(f'{existing_file}')
         if not os.path.exists(existing_file):
+            # self.writeInput(init_img_path, self.input_node)
             nuke.executeInMainThread(self.writeInput, args=(init_img_path, self.input_node,))
             time.sleep(1)
 
@@ -236,19 +309,34 @@ class MagicRotoSelectorLive(GizmoBase):
                 break
 
         y_shift = Image.open(existing_file).height
-
-        xy_points = int(xy_points[0]), y_shift - int(xy_points[1])
+        prompts = {}
+        for k, (point_coord, point_label) in self.get_prompt_data().items():
+            point_coord = int(point_coord[0]), y_shift - int(point_coord[1])
+            prompts.setdefault('point_coords', []).append(point_coord)
+            prompts.setdefault('point_labels', []).append(1 if point_label else 0)
 
         data_to_send = {
             'use_xy': True,
             'output_path': self.output_file_path,
             'frame': nuke.frame(),
             'init_img_path': init_img_path_padding,
-            'prompts': {
-                'point_coords': [xy_points],
-                'point_labels': [1]
-            }
+            'prompts': prompts
         }
+        multiData = {nuke.frame(): data_to_send}
+        self.attempt_to_send(multiData)
+
+        file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
+        self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
+
+    def _attempt_to_send(self, data_to_send):
+        if self.knob_change_timer is not None:
+            self.knob_change_timer.cancel()
+
+        # Create a new timer
+        self.knob_change_timer = threading.Timer(0.5, self._attempt_to_send, args=(data_to_send,))
+        self.knob_change_timer.start()
+
+    def attempt_to_send(self, data_to_send):
         while True:
             try:
                 self.mask_client.sendall(SocketServer.encode_data(data_to_send.copy()))
@@ -262,9 +350,6 @@ class MagicRotoSelectorLive(GizmoBase):
             except AttributeError:
                 logger.debug(f'AttributeError trying ensure_server_connection at port {self.main_port}')
                 self.ensure_server_connection()
-
-        file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
-        self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
 
     @property
     def output_file_path(self):
@@ -306,18 +391,6 @@ class MagicRotoSelectorLive(GizmoBase):
             keys.setValueAt(frame, frame)
 
         self.force_evaluate_nodes()
-
-    def close_server(self):
-        if self.mask_client:
-            header = b'command::'
-            self.mask_client.sendall(header + b'quit')
-            self.mask_client.close()
-            self.mask_client = None
-            logger.info("Server closed.")
-
-    def on_destroy(self):
-        if nuke.thisNode() == self.gizmo:
-            self.close_server()
 
 
 if __name__ == '__main__':

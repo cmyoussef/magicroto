@@ -74,13 +74,18 @@ class MagicRotoSelectorLive:
         return args
 
     def on_points_changed(self, data):
-        frame = f'{data.get("frame", 1001):04d}'
+        for frame, d in data.items():
+            self._on_points_changed(d, frame)
+
+    def _on_points_changed(self, data, frame=None):
+        frame = frame or f'{data.get("frame", 1001):04d}'
 
         self.args['output_path'] = data.get('output_path', self.args['output_path'])
         init_img_path = data.get('init_img_path', None)
+        logger.debug(f'init_img_path:{init_img_path}')
         if init_img_path is not None:
-            init_img_path = init_img_path.replace('.%04d.', f'.{frame}.')
-            # logger.warning(f'init_img_path << {init_img_path}')
+            init_img_path = init_img_path.replace('.%04d.', f'.{frame:04d}.')
+            logger.debug(f'renamed img << {init_img_path}')
             if init_img_path and os.path.isfile(init_img_path):
                 if not self.current_frame or self.current_frame != frame:
                     self.easyRoto.load_image(init_img_path)
@@ -88,11 +93,15 @@ class MagicRotoSelectorLive:
                     # time.sleep(1)
 
         self.easyRoto.args_dict['prompts'] = common_utils.get_dict_type(data['prompts'])
-        masks, scores, logits = self.easyRoto.predict()
+        result = self.easyRoto.predict()
+        if result is None:
+            logger.debug(f"Predict return none, server might not be ready yet")
+            return
 
+        masks, scores, logits = result
         img = image_utils.create_image_rgb(masks)
 
-        out_img = self.args['output_path'].replace('.%04d.', f'.{frame}.')
+        out_img = self.args['output_path'].replace('.%04d.', f'.{frame:04d}.')
         img.save(out_img)
         logger.info(f'Images saved {out_img}')
         return masks

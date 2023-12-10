@@ -4,7 +4,6 @@ import os.path
 from typing import Optional
 
 import numpy as np
-import torchvision.transforms as transforms
 from PIL import Image
 
 from magicroto.core.base_segmenter import BaseSegmenter
@@ -61,29 +60,14 @@ class MagicRotoSelectorExecutor:
         img = Image.open(image_path).convert("RGB")
         # img = self.ensure_BCHW(img)
         self.image = img
+        if self.segmenter is None:
+            logger.warning(
+                f"Segmenter is not initialized yet, you might need to wait a few moments, or restart the server")
+            return
         self.segmenter.reset_image()
         self.segmenter.set_image(np.array(self.image))
         logger.info(f'Setting Image << {image_path}, {self.image}')
         return self.image
-
-    def ensure_BCHW(self, image):
-        # Determine the resizing scale
-        long_side = max(image.size)
-        scale = 1024 / long_side
-
-        # Calculate new size, keeping aspect ratio
-        new_size = (int(image.size[0] * scale), int(image.size[1] * scale))
-
-        # Resize the image
-        image = image.resize(new_size, Image.Resampling.LANCZOS).convert("RGB")
-        return image
-        # Transform to tensor
-        to_tensor = transforms.ToTensor()
-        image_tensor = to_tensor(image)
-
-        print(image_tensor.shape)
-        # Add a batch dimension
-        return image_tensor
 
     def load_mask(self, mask_path=None):
 
@@ -109,6 +93,10 @@ class MagicRotoSelectorExecutor:
         #     logger.error(f'Mask Path dose not exists \n{mask_path}')
 
     def predict(self):
+        if self.segmenter is None:
+            logger.warning(
+                f"Segmenter is not initialized yet, you might need to wait a few moments, or restart the server")
+            return
 
         if not self.is_points:
             return

@@ -101,6 +101,7 @@ class GizmoBase:
         self.gizmo.end()
         self.active_read_nodes = []
         self.user_tabs = []
+        nuke.addOnDestroy(self.on_destroy)
 
     def ensure_server_connection(self):
         # self.write_input()
@@ -475,7 +476,8 @@ class GizmoBase:
     def find_available_port_knob(self):
         port_knob = self.gizmo.knob('port_knob')
         if port_knob:
-            port_knob.setValue(SocketServer.find_available_port())
+            self.main_port = SocketServer.find_available_port()
+            # port_knob.setValue()
 
     def reload_button(self):
         reload_btn = self.gizmo.knob('reload_btn_knob')
@@ -502,7 +504,8 @@ class GizmoBase:
         if not self.gizmo.knob('port_knob'):
             port_knob = nuke.Int_Knob('port_knob', f'Port {Icons.key_symbol}')
             port_knob.setFlag(nuke.STARTLINE)
-            port_knob.setValue(SocketServer.find_available_port())
+            # port_knob.setValue(SocketServer.find_available_port())
+            port_knob.setValue(64306)
             self.gizmo.addKnob(port_knob)
 
         if not self.gizmo.knob('find_available_port_knob'):
@@ -527,11 +530,11 @@ class GizmoBase:
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("attempt_reconnect")')
 
         if not self.gizmo.knob('close_server'):
-            cn_button = nuke.PyScript_Knob('close_to_server', f'Close{Icons.link_symbol}')
+            cn_button = nuke.PyScript_Knob('close_server', f'Close{Icons.link_symbol}')
             # cn_button.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(cn_button)
-        self.gizmo.knob('connect_to_server').setCommand(
-            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("attempt_reconnect")')
+        self.gizmo.knob('close_server').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("close_server")')
 
         # if not self.gizmo.knob('use_external_execute'):
         #     use_external_execute = nuke.Boolean_Knob('use_external_execute', f'Use Farm {Icons.tractor_symbol}')
@@ -552,7 +555,7 @@ class GizmoBase:
             self.gizmo.addKnob(interrupt_btn)
         self.gizmo.knob('interrupt_btn').setCommand(
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_interrupt")')
-        self.add_divider()
+        # self.add_divider()
 
         # self.set_status(running=False)
         # self.add_divider()
@@ -692,15 +695,13 @@ class GizmoBase:
 
     @property
     def frame_range(self):
-        use_frame_range_knob = self.gizmo.knob('use_frame_range_knobs')
-        if use_frame_range_knob and use_frame_range_knob.value():
-            start_frame = self.gizmo.knob('first_frame_knob').value()
-            end_frame = self.gizmo.knob('last_frame_knob').value()
-        else:
-            start_frame = end_frame = nuke.frame()
+
+        start_frame = self.gizmo.knob('first_frame_knob').value()
+        end_frame = self.gizmo.knob('last_frame_knob').value()
+
         return int(start_frame), int(end_frame)
 
-    def writeInput(self, outputPath, node=None, ext='png', add_padding=False):
+    def writeInput(self, outputPath, node=None, ext='png', add_padding=False, frame_range=None):
         node = node or self.input_node
         if not self.is_connected(node):
             self.gizmo.begin()
@@ -714,12 +715,14 @@ class GizmoBase:
 
         # Set the file_type and datatype
         write_node.knob('file_type').setValue(ext)
-
-        # write_node.knob('datatype').setValue('8 bit')
-        logger.debug(f'Output Path{outputPath}, frames {self.frame_range}')
-
         # Execute the Write node
-        start_frame, end_frame = self.frame_range
+        if frame_range is None:
+            start_frame = end_frame = nuke.frame()
+        else:
+            start_frame, end_frame = frame_range
+        # write_node.knob('datatype').setValue('8 bit')
+        logger.debug(f'Output Path{outputPath}, frames {start_frame, end_frame}')
+
         nuke.execute(write_node.name(), start_frame, end_frame)
         nuke.delete(write_node)
         self.gizmo.end()
@@ -729,7 +732,7 @@ class GizmoBase:
         return outputPath
 
     def get_init_img_path(self, img_name='init_img'):
-        logger.debug(self.gizmo.name())
+        # logger.debug(self.gizmo.name())
         init_img_dir = os.path.join(self.get_output_dir(), f'source_{self.gizmo.name()}')
         os.makedirs(init_img_dir, exist_ok=True)
 
@@ -784,6 +787,7 @@ class GizmoBase:
 
     def on_interrupt(self):
         p = False
+        self.close_server()
         for t in self.thread_list:
             try:
                 t.terminate()
@@ -868,6 +872,20 @@ class GizmoBase:
             knobC = self.gizmo.knob(knob)
             if knobC:
                 knobC.setVisible(show)
+
+    def close_server(self):
+
+        logger.debug(f'attempt to close server at port {self.main_port}, from {self.mask_client}')
+        if self.mask_client:
+            header = b'command::'
+            self.mask_client.sendall(header + b'quit')
+            self.mask_client.close()
+            self.mask_client = None
+            logger.info("Closing Command sent.")
+
+    def on_destroy(self):
+        if nuke.thisNode() == self.gizmo:
+            self.close_server()
 
 
 if __name__ == '__main__':
