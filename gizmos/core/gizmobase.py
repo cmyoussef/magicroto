@@ -1,6 +1,7 @@
 import inspect
 import json
 import os
+import socket
 import threading
 import time
 
@@ -13,6 +14,7 @@ from magicroto.utils.execute_thread import ExecuteThread
 from magicroto.utils.external_execute import run_external
 from magicroto.utils.icons import Icons
 from magicroto.utils.logger import logger_level, logger
+from magicroto.utils.soketserver import SocketServer
 
 
 class GizmoBase:
@@ -57,6 +59,8 @@ class GizmoBase:
         if self._initialized:
             logger.debug('\t stop init')
             return
+
+        self.mask_client = None
         self.thread_list = []
         self.base_class = self.__module__.rsplit('.')[0]
 
@@ -97,11 +101,90 @@ class GizmoBase:
         self.active_read_nodes = []
         self.user_tabs = []
 
+    def ensure_server_connection(self):
+        # self.write_input()
+        if self.is_server_running():
+            logger.info("Server is already running.")
+        else:
+            logger.info("Starting the server.")
+            self.on_interrupt()
+            self.start_server()
+
+        if not self.is_client_connected:
+            logger.info("Attempting to connect to the server.")
+            self.attempt_reconnect()
+
+    def is_server_running(self):
+        """Check if the server is running by attempting to connect to the server's port."""
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            test_socket.connect(("localhost", self.main_port))
+            test_socket.close()
+            return True
+        except socket.error:
+            return False
+
+    def connect_to_server(self):
+        try:
+            if self.mask_client is not None:
+                self.mask_client.close()
+
+            self.mask_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.mask_client.connect(("localhost", self.main_port))
+            self.mask_client.setblocking(False)
+            self.is_client_connected = True
+            logger.info(f"Successfully connected to server at port {self.main_port}")
+            nuke.executeInMainThread(self.set_status, args=(True, f"Successfully connected to server at port {self.main_port}",))
+            # self.set_status(True, f"Successfully connected to server at port {self.main_port}")
+            return True
+
+        except ConnectionRefusedError:
+            logger.warning(f"Connection to server at port {self.main_port} refused.")
+            self.mask_client.close()
+            self.is_client_connected = False
+            return False
+
+        except Exception as e:
+            logger.error(f"Error while connecting: {e}")
+            self.is_client_connected = False
+            return False
+
+    def start_server(self):
+        self.set_status(True, f"Starting server at port {self.main_port} << Check terminal")
+
+        self.update_args()
+
+        pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
+        post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
+
+        thread = ExecuteThread(self.args, None, pre_cmd, post_cmd)
+        thread.start()
+        self.thread_list.append(thread)
+
+        logger.info(f"Started server at port {self.main_port}")
+        self.set_status(True, f"Started server at port {self.main_port}")
+
+    def attempt_reconnect(self):
+        thread = threading.Thread(target=self._attempt_reconnect, args=())
+        thread.start()
+        logger.debug('Attempt reconnect on another thread')
+        self.thread_list.append(thread)
+
+    def _attempt_reconnect(self):
+        retry_count = 0
+        while not self.connect_to_server() and retry_count < 5:
+            time.sleep(1)  # Waiting for 1 second before retrying
+            retry_count += 1
+            logger.info(f"Retrying connection to server (Attempt {retry_count})")
+            if retry_count == 4:
+                self.main_port = SocketServer.find_available_port()
+        if retry_count == 5:
+            logger.error("Failed to connect to the server after multiple attempts.")
+
     @property
     def data(self):
         d = self.gizmo.knob("gizmo_data_knob").value()
         return common_utils.str_to_dict(d)
-
 
     @data.setter
     def data(self, d):
@@ -369,30 +452,80 @@ class GizmoBase:
         self.user_tabs.append('Generate')
         return self.gizmo.knob('generate')
 
+    @property
+    def main_port(self):
+        port_knob = self.gizmo.knob('port_knob')
+        if port_knob:
+            return int(port_knob.value())
+        else:
+            return SocketServer.find_available_port()
+
+    @main_port.setter
+    def main_port(self, port):
+        port_knob = self.gizmo.knob('port_knob')
+        if port_knob:
+            port_knob.setValue(int(port))
+
+    def find_available_port_knob(self):
+        port_knob = self.gizmo.knob('port_knob')
+        if port_knob:
+            port_knob.setValue(SocketServer.find_available_port())
+
     def create_generate_knobs(self):
         self.create_generate_tab()
-        self.add_divider()
+        self.add_divider("Server Utils")
 
-        if not self.gizmo.knob('use_external_execute'):
-            use_external_execute = nuke.Boolean_Knob('use_external_execute', f'Use Farm {Icons.tractor_symbol}')
-            use_external_execute.setFlag(nuke.STARTLINE)
-            # use_external_execute.setFlag(nuke.DISABLED)
-            self.gizmo.addKnob(use_external_execute)
+        if not self.gizmo.knob('port_knob'):
+            port_knob = nuke.Int_Knob('port_knob', f'Port {Icons.key_symbol}')
+            port_knob.setFlag(nuke.STARTLINE)
+            port_knob.setValue(SocketServer.find_available_port())
+            self.gizmo.addKnob(port_knob)
 
-        if not self.gizmo.knob('execute_btn'):
-            cn_button = nuke.PyScript_Knob('execute_btn', f'Execute {Icons.execute_symbol}')
+        if not self.gizmo.knob('find_available_port_knob'):
+            cn_button = nuke.PyScript_Knob('find_available_port_knob', f'{Icons.reuse_symbol}')
+            # cn_button.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(cn_button)
+        self.gizmo.knob('find_available_port_knob').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("find_available_port_knob")')
+
+        if not self.gizmo.knob('start_server'):
+            cn_button = nuke.PyScript_Knob('start_server', f'Start server{Icons.launch_gui_symbol}')
             cn_button.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(cn_button)
-        self.gizmo.knob('execute_btn').setCommand(
-            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_execute")')
+        self.gizmo.knob('start_server').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("ensure_server_connection")')
+
+        if not self.gizmo.knob('connect_to_server'):
+            cn_button = nuke.PyScript_Knob('connect_to_server', f'Connect to server{Icons.link_symbol}')
+            # cn_button.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(cn_button)
+        self.gizmo.knob('connect_to_server').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("attempt_reconnect")')
+
+
+        # if not self.gizmo.knob('use_external_execute'):
+        #     use_external_execute = nuke.Boolean_Knob('use_external_execute', f'Use Farm {Icons.tractor_symbol}')
+        #     use_external_execute.setFlag(nuke.STARTLINE)
+        #     # use_external_execute.setFlag(nuke.DISABLED)
+        #     self.gizmo.addKnob(use_external_execute)
+        #
+        # if not self.gizmo.knob('execute_btn'):
+        #     cn_button = nuke.PyScript_Knob('execute_btn', f'Execute {Icons.execute_symbol}')
+        #     cn_button.setFlag(nuke.STARTLINE)
+        #     self.gizmo.addKnob(cn_button)
+        # self.gizmo.knob('execute_btn').setCommand(
+        #     f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_execute")')
 
         if not self.gizmo.knob('interrupt_btn'):
-            interrupt_btn = nuke.PyScript_Knob('interrupt_btn', f'Interrupt {Icons.interrupt_symbol}')
+            interrupt_btn = nuke.PyScript_Knob('interrupt_btn', f'Force terminate servers {Icons.interrupt_symbol}')
+            interrupt_btn.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(interrupt_btn)
         self.gizmo.knob('interrupt_btn').setCommand(
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_interrupt")')
+        self.add_divider()
 
-        self.set_status(running=False)
+        # self.set_status(running=False)
+        # self.add_divider()
 
     @property
     def status_bar(self):
@@ -450,7 +583,7 @@ class GizmoBase:
         knob = knob or nuke.thisKnob()
         if knob.name() == 'controlNet_menu':
             pass
-            
+
         if knob.name() == 'logger_level_menu':
             logger.setLevel(logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20))
 
@@ -471,9 +604,16 @@ class GizmoBase:
     def output_node(self):
         return self.get_node("Output1", 'Output')
 
+    @property
+    def ports(self):
+        return [self.main_port]
+
     def update_args(self):
         self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
-        # return NotImplementedError()
+        self.args['ports'] = self.ports
+        self.args['python_path'] = self.python_path
+        self.args['cache_dir'] = self.cache_dir
+        self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
 
     def get_output_dir(self):
         output_dir = self.gizmo.knob("output_dir").value()
@@ -487,7 +627,7 @@ class GizmoBase:
         if nodeType is None:
             print("Node type is none and the node doesn't exists")
             return
-        
+
         self.gizmo.begin()
         if nodeType == 'Input':
             node = nuke.nodes.Input()
@@ -546,8 +686,7 @@ class GizmoBase:
         write_node.knob('file_type').setValue(ext)
 
         # write_node.knob('datatype').setValue('8 bit')
-        logger.warning(outputPath)
-
+        logger.debug(f'Output Path{outputPath}, frames {self.frame_range}')
 
         # Execute the Write node
         start_frame, end_frame = self.frame_range
@@ -560,10 +699,11 @@ class GizmoBase:
         return outputPath
 
     def get_init_img_path(self, img_name='init_img'):
-        init_img_dir = os.path.join(self.get_output_dir(), f'source_{self.__class__.__name__}')
+        logger.debug(self.gizmo.name())
+        init_img_dir = os.path.join(self.get_output_dir(), f'source_{self.gizmo.name()}')
         os.makedirs(init_img_dir, exist_ok=True)
 
-        init_img_path = os.path.join(init_img_dir, img_name+'.png')
+        init_img_path = os.path.join(init_img_dir, img_name + '.png')
         return init_img_path
 
     def on_execute(self):
@@ -622,7 +762,7 @@ class GizmoBase:
                 pass
         self.thread_list = []
         if p:
-            nuke.tprint(f'Terminating running processes')
+            logger.warning(f'Terminating running processes')
         self.set_status(running=False)
 
     @classmethod
@@ -638,7 +778,7 @@ class GizmoBase:
         # return
         func = getattr(inst, func_name, None)
         if func and callable(func):
-            logger.debug(f"running '{cls.__name__}' '{func_name}, Node Name: {nuke.thisNode().name()}'")
+            # logger.debug(f"running '{cls.__name__}' '{func_name}, Node Name: {nuke.thisNode().name()}'")
             return func(*args[1:], **kwargs)
         else:
             raise AttributeError(f"'{cls.__name__}' object has no method '{func_name}'")
@@ -674,6 +814,18 @@ class GizmoBase:
         node = self.get_node('Output1', 'Output')
 
         # for n in self.gizmo.nodes():
+        knob = node.knob('label')
+        current_label = knob.value()
+        knob.setValue(current_label + " ")
+        knob.setValue(current_label)
+
+    @staticmethod
+    def _force_evaluate_node(node):
+        # node.showControlPanel()
+        node.hideControlPanel()
+        node.showControlPanel()
+        node.redraw()
+        node.hideControlPanel()
         knob = node.knob('label')
         current_label = knob.value()
         knob.setValue(current_label + " ")

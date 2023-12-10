@@ -99,20 +99,20 @@ class SocketServer(metaclass=SingletonMeta):
         temp_sock.close()
         return port
 
-    def start_accepting_clients(self, data_handler=None):
+    def start_accepting_clients(self, data_handler=None, return_response_data=False):
         logger.info(f"Server starting on port {self.port}")
-        thread = threading.Thread(target=self.accept_client, args=(data_handler,))
+        thread = threading.Thread(target=self.accept_client, args=(data_handler, return_response_data,))
         thread.start()
         logger.debug(f"Starting to accept clients. on {thread}")
 
-    def accept_client(self, data_handler=None):
+    def accept_client(self, data_handler=None, return_response_data=False):
         logger.debug("Inside accept_client.")
         self.conn, self.addr = self.server_socket.accept()
         logger.debug(f"Accepted connection from {self.addr}.")
-        thread = threading.Thread(target=self.receive_data, args=(data_handler,))
+        thread = threading.Thread(target=self.receive_data, args=(data_handler, return_response_data,))
         thread.start()
 
-    def receive_data(self, data_handler=None):
+    def receive_data(self, data_handler=None, return_response_data=False):
         logger.debug("Inside receive_data.")
 
         data_buffer = b""
@@ -158,12 +158,13 @@ class SocketServer(metaclass=SingletonMeta):
                                 response_data = None
                                 if handler:
                                     response_data = handler(decoded_data)
+
                                 # Sending an acknowledgment back to the client
-                                # if response_data is not None:
-                                #     encoded_response = SocketServer.encode_data(response_data)
-                                #     logger.debug(f'Sending encoded_response type:{type(response_data)}')
-                                #     self.conn.sendall(encoded_response)
-                                # else:
+                                if response_data is not None and return_response_data:
+                                    encoded_response = SocketServer.encode_data(response_data)
+                                    logger.debug(f'Sending encoded_response type:{type(response_data)}')
+                                    self.conn.sendall(encoded_response)
+                                else:
                                     self.conn.sendall(b'ack')
                             except Exception as e:
                                 tb = traceback.format_exc()

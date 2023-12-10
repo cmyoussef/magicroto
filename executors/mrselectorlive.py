@@ -52,7 +52,8 @@ class MagicRotoSelectorLive:
 
         self.easyRoto = MagicRotoSelectorExecutor(args)
         self.segmenter = self.easyRoto.create_segmenter()
-        self.easyRoto.load_image(args['image'])
+        if args['image']:
+            self.easyRoto.load_image(args['image'])
         logger.info(f"Ready to use server at {self.mask_port}")
 
     @classmethod
@@ -75,6 +76,7 @@ class MagicRotoSelectorLive:
     def on_points_changed(self, data):
         frame = f'{data.get("frame", 1001):04d}'
 
+        self.args['output_path'] = data.get('output_path', self.args['output_path'])
         init_img_path = data.get('init_img_path', None)
         if init_img_path is not None:
             init_img_path = init_img_path.replace('.%04d.', f'.{frame}.')

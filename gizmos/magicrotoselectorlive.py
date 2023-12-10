@@ -1,18 +1,18 @@
 import glob
 import os
-import socket
 import threading
 import time
 from datetime import datetime
 
 import nuke
 from PIL import Image
+
 from magicroto.config.config_utils import mg_selector_live_path
 from magicroto.gizmos.core.gizmobase import GizmoBase
-from magicroto.utils import image_utils
-from magicroto.utils.execute_thread import ExecuteThread
-from magicroto.utils.icons import Icons
 from magicroto.utils import common_utils
+from magicroto.utils.icons import Icons
+from magicroto.utils.execute_thread import ExecuteThread
+
 from magicroto.utils.logger import logger, logger_level
 from magicroto.utils.soketserver import SocketServer
 
@@ -25,9 +25,6 @@ class MagicRotoSelectorLive(GizmoBase):
         self.knob_change_timer = None
         self.last_knob_value = None
 
-        self.mask_port = SocketServer.find_available_port()
-
-        self.mask_client = None
         # Variable to store the image
         if not self._initialized:
             self.is_client_connected = False  # Flag to track connection status
@@ -40,13 +37,17 @@ class MagicRotoSelectorLive(GizmoBase):
                      'SAM_checkpoint': os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth'),
                      'model_type': 'vit_h',
                      'device': "cuda:0",
-
                      'script_path': mg_selector_live_path}
+
         self.gizmo.begin()
         # Creating or getting the plus_mask node and setting its operation to "plus"
         self.plus_merge_node = self.get_node("plus_mask", 'Merge2')
         self.plus_merge_node['operation'].setValue("over")
         self.plus_merge_node['mix'].setValue(.5)
+
+        display_mask_knob = self.gizmo.knob('display_mask_knob')
+        self.plus_merge_node['disable'].setExpression(f"1-{display_mask_knob.name()}")
+
         # Clear selection
         nuke.selectAll()
         nuke.invertSelection()
@@ -58,8 +59,10 @@ class MagicRotoSelectorLive(GizmoBase):
         # 2. Connect mask_combine to the A input of plus_mask
         self.plus_merge_node.setInput(1, self.get_node(f"Read1", 'Read'))
 
+        self.add_gradient_and_expression()
+
         # 3. Connect plus_merge_node to output_node
-        self.output_node.setInput(0, self.plus_merge_node)
+        # self.output_node.setInput(0, self.plus_merge_node)
 
         # End of gizmo modification
         self.gizmo.end()
@@ -68,9 +71,42 @@ class MagicRotoSelectorLive(GizmoBase):
         self.counter = 0
         nuke.addOnDestroy(self.on_destroy)
 
+    def add_gradient_and_expression(self):
+        # Clear selection
+        nuke.selectAll()
+        nuke.invertSelection()
+
+        # Assuming self.get_node("Read1", 'Read') returns the Read node
+        read_node = self.get_node("Read1", 'Read')
+
+        # nuke.createNode("Grade")
+        # 1. Create a Grade Node
+        grade_node = self.get_node("Channel_selector", 'Grade')
+        grade_node.setInput(0, read_node)
+        # grade_node['multiply'].setValue(0, 1)
+        grade_node['multiply'].setSingleValue(False)
+
+        # 2. Create an Expression Node
+        expression_node = self.get_node("alpha_convert", 'Expression')
+        expression_node.setInput(0, grade_node)
+        expression_node['expr3'].setValue("clamp(r+g+b, 0, 1)")
+
+        # 3. Create a Copy Node
+        copy_node = self.get_node("copy_alpha", 'Copy')
+        copy_node.setInput(0, self.plus_merge_node)  # Existing node connected to the output
+        copy_node.setInput(1, expression_node)
+        copy_node['from0'].setValue("alpha")
+        copy_node['to0'].setValue("alpha")
+
+        # Update the output node connection to use the Copy node
+        self.output_node.setInput(0, copy_node)
+        self.plus_merge_node.setInput(1, grade_node)
+
+        return grade_node
+
     def write_input(self):
-        # if not self.is_connected(self.input_node):
-        #     return
+        if not self.is_connected(self.input_node):
+            return
 
         init_img_path = self.get_init_img_path()
         init_img_path_padding = self.add_padding(init_img_path)
@@ -78,76 +114,6 @@ class MagicRotoSelectorLive(GizmoBase):
 
         self.writeInput(init_img_path, self.input_node)
         return existing_file
-
-    def ensure_server_connection(self):
-        # self.write_input()
-        if self.is_server_running():
-            logger.info("Server is already running.")
-        else:
-            logger.info("Starting the server.")
-            self.start_server()
-
-        if not self.is_client_connected:
-            logger.info("Attempting to connect to the server.")
-            self.attempt_reconnect()
-
-    def is_server_running(self):
-        """Check if the server is running by attempting to connect to the server's port."""
-        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            test_socket.connect(("localhost", self.mask_port))
-            test_socket.close()
-            return True
-        except socket.error:
-            return False
-
-    def connect_to_server(self):
-        try:
-            if self.mask_client is not None:
-                self.mask_client.close()
-
-            self.mask_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.mask_client.connect(("localhost", self.mask_port))
-            self.mask_client.setblocking(False)
-            self.is_client_connected = True
-            logger.info(f"Successfully connected to server at port {self.mask_port}")
-            self.set_status(True, f"Successfully connected to server at port {self.mask_port}")
-            return True
-        except ConnectionRefusedError:
-            logger.warning(f"Connection to server at port {self.mask_port} refused.")
-            self.mask_client.close()
-            self.is_client_connected = False
-            return False
-        except Exception as e:
-            logger.error(f"Error while connecting: {e}")
-            self.is_client_connected = False
-            return False
-
-    def start_server(self):
-        self.set_status(True, f"Starting server at port {self.mask_port} << Check terminal")
-
-        self.update_args()
-
-        pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
-        post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
-
-        thread = ExecuteThread(self.args, None, pre_cmd, post_cmd)
-        thread.start()
-        self.thread_list.append(thread)
-
-        logger.info(f"Started server at port {self.mask_port}")
-        self.set_status(True, f"Started server at port {self.mask_port}")
-
-    def attempt_reconnect(self):
-        retry_count = 0
-        while not self.connect_to_server() and retry_count < 5:
-            time.sleep(1)  # Waiting for 1 second before retrying
-            retry_count += 1
-            logger.info(f"Retrying connection to server (Attempt {retry_count})")
-            if retry_count == 4:
-                self.mask_port = SocketServer.find_available_port()
-        if retry_count == 5:
-            logger.error("Failed to connect to the server after multiple attempts.")
 
     @property
     def input_node(self):
@@ -158,40 +124,38 @@ class MagicRotoSelectorLive(GizmoBase):
         return self.get_node("mask", 'Input')
 
     def create_generate_knobs(self):
+
         self.create_generate_tab()
-
-        if not self.gizmo.knob('connect_to_server'):
-            cn_button = nuke.PyScript_Knob('connect_to_server', f'Connect to server{Icons.launch_gui_symbol}')
-            cn_button.setFlag(nuke.STARTLINE)
-            self.gizmo.addKnob(cn_button)
-        self.gizmo.knob('connect_to_server').setCommand(
-            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("ensure_server_connection")')
-
-        self.add_divider()
+        super().create_generate_knobs()
 
         # region frame rang
         if not self.gizmo.knob('first_frame_knob'):
             first_frame_knob = nuke.Int_Knob('first_frame_knob', ' ')
             nuke.root().knob('first_frame').value()
             first_frame_knob.setFlag(nuke.STARTLINE)
-            first_frame_knob.setFlag(nuke.DISABLED)
+            # first_frame_knob.setFlag(nuke.DISABLED)
             first_frame_knob.setValue(int(nuke.root().knob('first_frame').value()))
             self.gizmo.addKnob(first_frame_knob)
 
         if not self.gizmo.knob('last_frame_knob'):
             end_frame_knob = nuke.Int_Knob('last_frame_knob', ' ')
             end_frame_knob.clearFlag(nuke.STARTLINE)
-            end_frame_knob.setFlag(nuke.DISABLED)
+            # end_frame_knob.setFlag(nuke.DISABLED)
             end_frame_knob.setValue(int(nuke.root().knob('last_frame').value()))
             self.gizmo.addKnob(end_frame_knob)
 
-        if not self.gizmo.knob('use_frame_range_knobs'):
-            use_frame_range_knobs = nuke.Boolean_Knob('use_frame_range_knobs',
-                                                      f'{Icons.video_symbol} Use frame range')
-            use_frame_range_knobs.clearFlag(nuke.STARTLINE)
-            self.gizmo.addKnob(use_frame_range_knobs)
+        if not self.gizmo.knob('frame_range_label_knob'):
+            frame_range_label_knob = nuke.Text_Knob('frame_range_label_knob', 'Frame Range')
+            frame_range_label_knob.clearFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(frame_range_label_knob)
+
+        # if not self.gizmo.knob('use_frame_range_knobs'):
+        #     use_frame_range_knobs = nuke.Boolean_Knob('use_frame_range_knobs',
+        #                                               f'{Icons.video_symbol} Use frame range')
+        #     use_frame_range_knobs.clearFlag(nuke.STARTLINE)
+        #     self.gizmo.addKnob(use_frame_range_knobs)
         # endregion
-        self.add_divider()
+        self.add_divider('Trackers')
 
         if not self.gizmo.knob('track_01'):
             track_01_xy = nuke.XY_Knob('track_01', f'Track 01')
@@ -200,20 +164,35 @@ class MagicRotoSelectorLive(GizmoBase):
 
         self.add_divider('masks')
 
-        for i in range(1, 3):
+        display_mask_knob = self.gizmo.knob('display_mask_knob')
+        if not display_mask_knob:
+            display_mask_knob = nuke.Boolean_Knob('display_mask_knob', 'display mask')
+            display_mask_knob.setFlag(nuke.STARTLINE)
+            display_mask_knob.setValue(True)
+            self.gizmo.addKnob(display_mask_knob)
+
+        grade_node = self.get_node("Channel_selector", 'Grade')
+        grade_node['multiply'].setSingleValue(False)
+        self._force_evaluate_node(grade_node)
+
+        channels = ['red', 'green', 'blue']
+        for i in range(1, 4):
             knobLabel = '{:02d}'.format(i)
+            knobLabel = 'RGB'[i-1]
             knobName = f'mask_{knobLabel}_knob'
-            if not self.gizmo.knob(knobName):
+            msk_knob = self.gizmo.knob(knobName)
+            if not msk_knob:
                 msk_knob = nuke.Boolean_Knob(knobName, knobLabel)
                 self.gizmo.addKnob(msk_knob)
                 if i == 1 or i % 10 == 1:
                     msk_knob.setFlag(nuke.STARTLINE)
-                msk_knob.setVisible(False)
                 msk_knob.setValue(1)
+
+            grade_node['multiply'].setExpression(f"{knobName}", i-1)
+
 
         status_bar = self.status_bar
         self.set_status(running=False)
-        # super().create_generate_knobs()
 
     def knobChanged(self, knob=None):
 
@@ -253,6 +232,7 @@ class MagicRotoSelectorLive(GizmoBase):
             safety_break += 1
             if safety_break > 10:
                 logger.error(f'Not able to load {existing_file}')
+                break
 
         y_shift = Image.open(existing_file).height
 
@@ -260,6 +240,7 @@ class MagicRotoSelectorLive(GizmoBase):
 
         data_to_send = {
             'use_xy': True,
+            'output_path': self.output_file_path,
             'frame': nuke.frame(),
             'init_img_path': init_img_path_padding,
             'prompts': {
@@ -270,17 +251,19 @@ class MagicRotoSelectorLive(GizmoBase):
         while True:
             try:
                 self.mask_client.sendall(SocketServer.encode_data(data_to_send.copy()))
+                logger.debug(f'data_to_send: {data_to_send}')
                 break
 
             except ConnectionResetError:
+                logger.debug(f'ConnectionResetError trying ensure_server_connection at port {self.main_port}')
                 self.ensure_server_connection()
 
             except AttributeError:
+                logger.debug(f'AttributeError trying ensure_server_connection at port {self.main_port}')
                 self.ensure_server_connection()
 
         file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
         self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
-
 
     @property
     def output_file_path(self):
@@ -291,17 +274,12 @@ class MagicRotoSelectorLive(GizmoBase):
 
     def update_args(self):
         super().update_args()
-
-        self.args['image'] = self.write_input()
-        self.args['python_path'] = self.python_path
-        self.args['cache_dir'] = self.cache_dir
+        img_path = self.write_input()
+        if img_path:
+            self.args['image'] = img_path
         self.args['output_path'] = self.output_file_path
-        self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
-        self.args['ports'] = [self.mask_port]
         self.args['script_path'] = mg_selector_live_path
-        self.args['cache_dir'] = self.cache_dir
         self.args['SAM_checkpoint'] = os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth')
-        self.args['python_path'] = self.python_path
 
     def update_single_read_node(self, node, file_path):
         file_path = file_path.replace('"', '').replace('\\', '/')

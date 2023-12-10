@@ -216,8 +216,8 @@ def populate_toolbar(toolbar, dev_mode=False):
             print(f"|_|_creating button {suffix}_{cmd_name} with class {cmd_module}.{cmd_name}(name='{suffix}_{cmd_name}')")
         m.addSeparator()
 
-    for package_name in list(set(base_modules)):
-        classes_list.extend(find_package_classes(package_name))
+    # for package_name in list(set(base_modules)):
+    #     classes_list.extend(find_package_classes(package_name))
 
     classes_list = list(set(classes_list))
     if dev_mode:
