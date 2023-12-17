@@ -4,6 +4,7 @@ import os
 import socket
 import threading
 import time
+from datetime import datetime
 
 import nuke
 
@@ -53,7 +54,7 @@ class GizmoBase:
             self.default_knobs = []
         else:
             self.gizmo = nuke.createNode('Group', inpanel=False)
-            self.gizmo.setName(name or f'ET_{self.__class__.__name__}')
+            self.gizmo.setName(name or f'MR_{self.__class__.__name__}')
             self.default_knobs = list(set(self.gizmo.knobs().keys()))
 
         # prevent initializing classes
@@ -536,19 +537,6 @@ class GizmoBase:
         self.gizmo.knob('close_server').setCommand(
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("close_server")')
 
-        # if not self.gizmo.knob('use_external_execute'):
-        #     use_external_execute = nuke.Boolean_Knob('use_external_execute', f'Use Farm {Icons.tractor_symbol}')
-        #     use_external_execute.setFlag(nuke.STARTLINE)
-        #     # use_external_execute.setFlag(nuke.DISABLED)
-        #     self.gizmo.addKnob(use_external_execute)
-        #
-        # if not self.gizmo.knob('execute_btn'):
-        #     cn_button = nuke.PyScript_Knob('execute_btn', f'Execute {Icons.execute_symbol}')
-        #     cn_button.setFlag(nuke.STARTLINE)
-        #     self.gizmo.addKnob(cn_button)
-        # self.gizmo.knob('execute_btn').setCommand(
-        #     f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_execute")')
-
         if not self.gizmo.knob('interrupt_btn'):
             interrupt_btn = nuke.PyScript_Knob('interrupt_btn', f'Force terminate All{Icons.explosion_symbol}')
             interrupt_btn.setFlag(nuke.STARTLINE)
@@ -559,6 +547,20 @@ class GizmoBase:
 
         # self.set_status(running=False)
         # self.add_divider()
+
+    def create_execute_buttons(self):
+        if not self.gizmo.knob('use_external_execute'):
+            use_external_execute = nuke.Boolean_Knob('use_external_execute', f'Use Farm {Icons.tractor_symbol}')
+            use_external_execute.setFlag(nuke.STARTLINE)
+            # use_external_execute.setFlag(nuke.DISABLED)
+            self.gizmo.addKnob(use_external_execute)
+
+        if not self.gizmo.knob('execute_btn'):
+            cn_button = nuke.PyScript_Knob('execute_btn', f'Execute {Icons.execute_symbol}')
+            cn_button.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(cn_button)
+        self.gizmo.knob('execute_btn').setCommand(
+            f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_execute")')
 
     @property
     def status_bar(self):
@@ -646,7 +648,14 @@ class GizmoBase:
         self.args['ports'] = self.ports
         self.args['python_path'] = self.python_path
         self.args['cache_dir'] = self.cache_dir
-        self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
+
+    @property
+    def output_file_path(self):
+        file_name = 'mask.png'
+        output_dir_path = os.path.join(self.get_output_dir(), f'{datetime.now().strftime("%Y%m%d")}')
+        output_dir_path = output_dir_path.replace('\\', '/')
+        os.makedirs(output_dir_path, exist_ok=True)
+        return self.add_padding(os.path.join(output_dir_path, file_name))
 
     def get_output_dir(self):
         output_dir = self.gizmo.knob("output_dir").value()
@@ -693,6 +702,28 @@ class GizmoBase:
         path = f"{base_path}.{ext}" if f'.{self.frame_padding}.' in path else f"{base_path}.%04d.{ext}"
         return path
 
+    def create_frame_range_knobs(self):
+
+        if not self.gizmo.knob('first_frame_knob'):
+            first_frame_knob = nuke.Int_Knob('first_frame_knob', ' ')
+            nuke.root().knob('first_frame').value()
+            first_frame_knob.setFlag(nuke.STARTLINE)
+            # first_frame_knob.setFlag(nuke.DISABLED)
+            first_frame_knob.setValue(int(nuke.root().knob('first_frame').value()))
+            self.gizmo.addKnob(first_frame_knob)
+
+        if not self.gizmo.knob('last_frame_knob'):
+            end_frame_knob = nuke.Int_Knob('last_frame_knob', ' ')
+            end_frame_knob.clearFlag(nuke.STARTLINE)
+            # end_frame_knob.setFlag(nuke.DISABLED)
+            end_frame_knob.setValue(int(nuke.root().knob('last_frame').value()))
+            self.gizmo.addKnob(end_frame_knob)
+
+        if not self.gizmo.knob('frame_range_label_knob'):
+            frame_range_label_knob = nuke.Text_Knob('frame_range_label_knob', 'Frame Range')
+            frame_range_label_knob.clearFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(frame_range_label_knob)
+
     @property
     def frame_range(self):
 
@@ -701,13 +732,29 @@ class GizmoBase:
 
         return int(start_frame), int(end_frame)
 
-    def writeInput(self, outputPath, node=None, ext='png', add_padding=False, frame_range=None):
+    def writeInput(self, outputPath, node=None, ext='png', add_padding=False, frame_range=None, temp=False):
         node = node or self.input_node
         if not self.is_connected(node):
             self.gizmo.begin()
 
         # Use a Write node to save the input image
         write_node = nuke.nodes.Write()
+        write_node['create_directories'].setValue(True)
+        nodes_to_delete = [write_node]
+        if temp:
+            base_path, current_ext = os.path.splitext(outputPath)
+            base_dir = os.path.dirname(base_path)
+            base_name = os.path.basename(base_path)
+            outputPath = os.path.join(base_dir, 'temp', f'{base_name}.{ext}')
+            reformat_node = nuke.nodes.Reformat()
+            nodes_to_delete.append(reformat_node)
+            reformat_node.setInput(0, node)
+            reformat_node['type'].setValue('to box')
+            reformat_node['box_fixed'].setValue(True)
+            reformat_node['box_width'].setValue(1)
+            reformat_node['box_height'].setValue(1)
+            write_node.setInput(0, reformat_node)
+
         outputPath = self.add_padding(outputPath, ext)
         write_node.knob('file').setValue(outputPath)
         write_node.knob('channels').setValue('rgba')
@@ -724,7 +771,8 @@ class GizmoBase:
         logger.debug(f'Output Path{outputPath}, frames {start_frame, end_frame}')
 
         nuke.execute(write_node.name(), start_frame, end_frame)
-        nuke.delete(write_node)
+        for n in nodes_to_delete:
+            nuke.delete(n)
         self.gizmo.end()
 
         if not add_padding:
@@ -740,6 +788,7 @@ class GizmoBase:
         return init_img_path
 
     def on_execute(self):
+        self.update_args()
 
         pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
         post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
@@ -777,6 +826,11 @@ class GizmoBase:
         return output_nodes
 
     def check_multiple_files(self, node_names, file_paths):
+        if not isinstance(node_names, list):
+            node_names = [node_names]
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
         # Create a thread for each file
         timeout = self.gizmo.knob('time_out').value()
         files = zip(file_paths, node_names)
@@ -821,23 +875,33 @@ class GizmoBase:
         file_path = file_path.replace('"', '').replace('\\', '/')
         node.knob('file').setValue(file_path)
         node.knob('reload').execute()
+
+        first, last = self.frame_range
+        node.knob('first').setValue(first)
+        node.knob('last').setValue(last)
+
+        # Set the 'on_error' parameter to 'nearest frame'
+        node.knob('on_error').setValue('black')
         self.force_evaluate_nodes()
 
     def check_files(self, files, timeout):
-        time.sleep(.5)
+        time.sleep(5)
         start_time = time.time()
-        remaining_files = set(files)  # Convert list to set for efficient removal.
+        # Convert list to set for efficient removal.
+        remaining_files = set(files)
         while remaining_files:
             for file_path, node in list(remaining_files):  # Create a copy of the set for iteration.
-                if common_utils.check_file_complete(file_path):
-                    # time.sleep(1)
+                file_path_to_check = file_path.replace(f'.{self.frame_padding}.', f'.{self.frame_range[0]:04d}.')
+                if common_utils.check_file_complete(file_path_to_check):
+                    time.sleep(1)
                     nuke.executeInMainThread(self.update_single_read_node, args=(node, file_path,))
+                    logger.debug(f'updating {file_path}')
                     remaining_files.remove((file_path, node))  # Remove from the set.
             # Check if the timeout has been reached
             if time.time() - start_time > timeout:
-                print("Timeout reached")
+                logger.warning("Timeout reached, It will stop look for the image to be rendered")
                 break
-            time.sleep(.1)
+            time.sleep(2)
 
     @staticmethod
     def disconnect_inputs(node):

@@ -120,6 +120,29 @@ class MagicRotoSelectorLive(GizmoBase):
     def mask_input_node(self):
         return self.get_node("mask", 'Input')
 
+    def create_tracking_knob(self, n, neg=False):
+        tracking_label = f'track_{n:02d}'
+        if neg:
+            tracking_label += '_neg'
+
+        knobName = tracking_label
+        if not self.gizmo.knob(knobName):
+            track_xy = nuke.XY_Knob(knobName, tracking_label)
+            track_xy.setFlag(nuke.STARTLINE)
+            if n != 1 or neg:
+                track_xy.setEnabled(False)
+            self.gizmo.addKnob(track_xy)
+
+        knobName = tracking_label + '_enable'
+
+        if not self.gizmo.knob(knobName):
+            track_check = nuke.Boolean_Knob(knobName, '')
+            # track_xy.setFlag(nuke.STARTLINE)
+            if n == 1 and not neg:
+                track_check.setValue(True)
+            track_check.clearFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(track_check)
+
     def create_generate_knobs(self):
 
         self.create_generate_tab()
@@ -127,10 +150,11 @@ class MagicRotoSelectorLive(GizmoBase):
 
         self.add_divider('Trackers')
 
-        if not self.gizmo.knob('track_01'):
-            track_01_xy = nuke.XY_Knob('track_01', f'Track 01')
-            track_01_xy.setFlag(nuke.STARTLINE)
-            self.gizmo.addKnob(track_01_xy)
+        for i in range(1, 4):
+            self.create_tracking_knob(i)
+        self.add_divider()
+        for i in range(1, 4):
+            self.create_tracking_knob(i, True)
 
         self.add_divider('masks')
 
@@ -163,25 +187,7 @@ class MagicRotoSelectorLive(GizmoBase):
         # region frame range
         self.add_divider('Trackers')
 
-        if not self.gizmo.knob('first_frame_knob'):
-            first_frame_knob = nuke.Int_Knob('first_frame_knob', ' ')
-            nuke.root().knob('first_frame').value()
-            first_frame_knob.setFlag(nuke.STARTLINE)
-            # first_frame_knob.setFlag(nuke.DISABLED)
-            first_frame_knob.setValue(int(nuke.root().knob('first_frame').value()))
-            self.gizmo.addKnob(first_frame_knob)
-
-        if not self.gizmo.knob('last_frame_knob'):
-            end_frame_knob = nuke.Int_Knob('last_frame_knob', ' ')
-            end_frame_knob.clearFlag(nuke.STARTLINE)
-            # end_frame_knob.setFlag(nuke.DISABLED)
-            end_frame_knob.setValue(int(nuke.root().knob('last_frame').value()))
-            self.gizmo.addKnob(end_frame_knob)
-
-        if not self.gizmo.knob('frame_range_label_knob'):
-            frame_range_label_knob = nuke.Text_Knob('frame_range_label_knob', 'Frame Range')
-            frame_range_label_knob.clearFlag(nuke.STARTLINE)
-            self.gizmo.addKnob(frame_range_label_knob)
+        self.create_frame_range_knobs()
 
         if not self.gizmo.knob('cache_frame_btn_knob'):
             cn_button = nuke.PyScript_Knob('cache_frame_btn_knob', f'Cache input {Icons.download_symbol}')
@@ -215,7 +221,9 @@ class MagicRotoSelectorLive(GizmoBase):
         prompt_data = {}
         for knob_name, knob in self.gizmo.knobs().items():
             # Check if 'track_' is in the knob name
-            if 'track_' in knob_name:
+            if 'track_' in knob_name and not knob_name.endswith('_enable'):
+                if not knob.enabled():
+                    continue
                 xy = int(knob.value()[0]), int(knob.value()[1])
                 prompt_data[knob_name] = (xy, not knob_name.endswith('_neg'))
         return prompt_data
@@ -225,14 +233,23 @@ class MagicRotoSelectorLive(GizmoBase):
         init_img_path_padding = self.add_padding(init_img_path)
         multi_frame_data = {}
         start_frame, end_frame = self.frame_range
+        logger.debug(f'self.frame_range {self.frame_range}')
         for i in range(start_frame, end_frame+1):
+            # nuke.frame(i)
+            # nuke.execute(self.gizmo, i, i)
+            # nuke.executeInMainThreadWithResult(nuke.frame, args=(i, ))
             existing_file = init_img_path_padding.replace(f'.{self.frame_padding}.', f".{i:04d}.")
-            nuke.frame(i)
+            # nuke.executeInMainThread(nuke.frame, args=(i, ))
+            self.force_evaluate_nodes()
+            logger.debug(f"Move to frame {i}")
             if not os.path.exists(existing_file):
                 self.writeInput(init_img_path, self.input_node, frame_range=(i, i))
+            else:
+                self.writeInput(init_img_path, self.input_node, frame_range=(i, i), temp=True)
 
             y_shift = Image.open(existing_file).height
             prompt_data = self.get_prompt_data()
+            logger.debug(f'prompt_data:{prompt_data}')
             prompts = {}
             for k, (point_coord, point_label) in prompt_data.items():
                 point_coord = int(point_coord[0]), y_shift - int(point_coord[1])
@@ -268,13 +285,21 @@ class MagicRotoSelectorLive(GizmoBase):
 
         knob = knob or nuke.thisKnob()
         send_call = [False]
-        if 'track_' in knob.name() and self.mask_client:
-            xy = int(knob.value()[0]), int(knob.value()[1])
-            # Check if the value has changed
-            if self.check_last_knob_value(xy, knob.name()):
-                # Update the last known value
-                self.last_knob_value[knob.name()] = (xy, not knob.name().endswith('_neg'))
-                send_call.append(True)
+        name = knob.name()
+        if 'track_' in name and name.endswith('_enable'):
+            track_knob = self.gizmo.knob(name[:-len('_enable')])
+            print(knob.value())
+            track_knob.setEnabled(knob.value())
+
+        if 'track_' in name and self.mask_client and not name.endswith('_enable'):
+
+            if knob.enabled():
+                xy = int(knob.value()[0]), int(knob.value()[1])
+                # Check if the value has changed
+                if self.check_last_knob_value(xy, name):
+                    # Update the last known value
+                    self.last_knob_value[name] = (xy, not name.endswith('_neg'))
+                    send_call.append(True)
 
         if any(send_call):
             # Cancel the existing timer if it's running
@@ -337,7 +362,13 @@ class MagicRotoSelectorLive(GizmoBase):
         self.knob_change_timer.start()
 
     def attempt_to_send(self, data_to_send):
-        while True:
+        try_count = 0
+        while True and try_count < 11:
+            try_count += 1
+
+            if try_count == 10:
+                logger.warning(f"Failed to send to the server at {self.main_port}")
+
             try:
                 self.mask_client.sendall(SocketServer.encode_data(data_to_send.copy()))
                 logger.debug(f'data_to_send: {data_to_send}')
@@ -351,12 +382,8 @@ class MagicRotoSelectorLive(GizmoBase):
                 logger.debug(f'AttributeError trying ensure_server_connection at port {self.main_port}')
                 self.ensure_server_connection()
 
-    @property
-    def output_file_path(self):
-        output_dir_path = os.path.join(self.get_output_dir(), f'{datetime.now().strftime("%Y%m%d")}')
-        output_dir_path = output_dir_path.replace('\\', '/')
-        os.makedirs(output_dir_path, exist_ok=True)
-        return self.add_padding(os.path.join(output_dir_path, 'mask.png'))
+
+
 
     def update_args(self):
         super().update_args()
