@@ -204,7 +204,7 @@ class MagicRotoSelector(GizmoBase):
         for i, mask in enumerate(reversed(masks)):
             filename = f'mask_{i}.{current_frame:04d}.png'
             filePath = os.path.join(output_dir_path, filename).replace('\\', '/')
-            color = image_utils.roto_colors[i % len(image_utils.roto_colors)]
+            color = image_utils.color_list[i % len(image_utils.color_list)]
             image = image_utils.create_image(mask, color)
             image.save(filePath)
             output_batch_list.append(f'"{filePath}"')

@@ -1,56 +1,58 @@
-# import for debugging
 import glob
 import os
 
 import numpy as np
-import progressbar
-# import for base_tracker
 import torch
-import torch.nn.functional as F
 import yaml
 from PIL import Image
+from torch.nn import functional as F
 from torchvision import transforms
 
+# Custom imports
 from inference.inference_core import InferenceCore
-from tools.painter import mask_painter
+from tools.painter import mask_painter, create_exr_image
 from tracker.model.network import XMem
 from tracker.util.mask_mapper import MaskMapper
 from tracker.util.range_transform import im_normalization
 
-dir_ = os.path.dirname(__file__)
-
 
 class BaseTracker:
-    def __init__(self, xmem_checkpoint, device, sam_model=None, model_type=None) -> None:
+    def __init__(self, xmem_checkpoint, device) -> None:
         """
-        device: model device
-        xmem_checkpoint: checkpoint of XMem model
+        Initialize the BaseTracker.
+
+        @param xmem_checkpoint: Checkpoint of XMem model.
+        @param device: Model device.
+        @return: None
         """
-        # load configurations
+        # Load configurations
+        dir_ = os.path.dirname(__file__)
         with open(os.path.join(dir_, 'config', 'config.yaml'), 'r') as stream:
             config = yaml.safe_load(stream)
-            # initialise XMem
+
+        # Initialize XMem and InferenceCore
         network = XMem(config, xmem_checkpoint).to(device).eval()
-        # initialise IncerenceCore
         self.tracker = InferenceCore(network, config)
-        # data transformation
+
+        # Data transformation
         self.im_transform = transforms.Compose([
             transforms.ToTensor(),
             im_normalization,
         ])
         self.device = device
 
-        # changable properties
+        # Changable properties
         self.mapper = MaskMapper()
         self.initialised = False
 
-        # # SAM-based refinement
-        # self.sam_model = sam_model
-        # self.resizer = Resize([256, 256])
-
     @torch.no_grad()
     def resize_mask(self, mask):
-        # mask transform is applied AFTER mapper, so we need to post-process it in eval.py
+        """
+        Resize the mask.
+
+        @param mask: Input mask to resize.
+        @return: Resized mask.
+        """
         h, w = mask.shape[-2:]
         min_hw = min(h, w)
         return F.interpolate(mask, (int(h / min_hw * self.size), int(w / min_hw * self.size)),
@@ -59,52 +61,54 @@ class BaseTracker:
     @torch.no_grad()
     def track(self, frame, first_frame_annotation=None):
         """
-        Input: 
-        frames: numpy arrays (H, W, 3)
-        logit: numpy array (H, W), logit
+        Track the given frame and return masks.
 
-        Output:
-        mask: numpy arrays (H, W)
-        logit: numpy arrays, probability map (H, W)
-        painted_image: numpy array (H, W, 3)
+        @param frame: Input frame as a numpy array (H, W, 3).
+        @param first_frame_annotation: First frame annotation (optional).
+        @return: Tuple of final combined mask, individual masks.
         """
-
-        if first_frame_annotation is not None:  # first frame mask
-            # initialisation
+        mask, labels = (None, None)
+        if first_frame_annotation is not None:
             mask, labels = self.mapper.convert_mask(first_frame_annotation)
             mask = torch.Tensor(mask).to(self.device)
             self.tracker.set_all_labels(list(self.mapper.remappings.values()))
-        else:
-            mask = None
-            labels = None
-        # prepare inputs
+
         frame_tensor = self.im_transform(frame).to(self.device)
-        # track one frame
-        probs, _ = self.tracker.step(frame_tensor, mask, labels)  # logits 2 (bg fg) H W
-        # # refine
-        # if first_frame_annotation is None:
-        #     out_mask = self.sam_refinement(frame, logits[1], ti)    
+        probs, _ = self.tracker.step(frame_tensor, mask, labels)
 
-        # convert to mask
-        out_mask = torch.argmax(probs, dim=0)
-        out_mask = (out_mask.detach().cpu().numpy()).astype(np.uint8)
+        out_mask = torch.argmax(probs, dim=0).detach().cpu().numpy().astype(np.uint8)
+        final_combined_mask = np.zeros_like(out_mask)
+        individual_masks = []
 
-        final_mask = np.zeros_like(out_mask)
-
-        # map back
+        # Map back and combine masks
         for k, v in self.mapper.remappings.items():
-            final_mask[out_mask == v] = k
+            object_mask = (out_mask == v).astype(np.uint8)
+            final_combined_mask += object_mask * k
+            individual_masks.append(object_mask)
 
-        num_objs = final_mask.max()
-        painted_image = frame
-        for obj in range(1, num_objs + 1):
-            if np.max(final_mask == obj) == 0:
-                continue
-            painted_image = mask_painter(painted_image, (final_mask == obj).astype('uint8'), mask_color=obj + 1)
+        return final_combined_mask, individual_masks
 
-        # print(f'max memory allocated: {torch.cuda.max_memory_allocated()/(2**20)} MB')
+    @staticmethod
+    def paint_masks_on_image(individual_masks, image=None):
+        """
+        Paints each mask from individual masks onto an image or a black background if no image is provided.
 
-        return final_mask, final_mask, painted_image
+        @param individual_masks: List of masks for each object.
+        @param image: Optional; the image on which to paint the masks. If None, a black image is used.
+        @return: Image with painted masks.
+        """
+        if image is None:
+            # Assuming all masks have the same dimensions
+            height, width = individual_masks[0].shape[:2]
+            image = np.zeros((height, width, 3), dtype=np.uint8)
+
+        painted_image = image.copy()
+        for idx, mask in enumerate(individual_masks):
+            mask_color = idx + 1  # Assuming each index corresponds to a unique color
+            painted_image = mask_painter(painted_image, mask, mask_color, mask_alpha=0.7, contour_color=1,
+                                         contour_width=3)
+
+        return painted_image
 
     @torch.no_grad()
     def sam_refinement(self, frame, logits, ti):
@@ -126,6 +130,11 @@ class BaseTracker:
 
     @torch.no_grad()
     def clear_memory(self):
+        """
+        Clear memory caches.
+
+        @return: None
+        """
         self.tracker.clear_memory()
         self.mapper.clear_labels()
         torch.cuda.empty_cache()
@@ -142,15 +151,18 @@ class BaseTracker:
 
 if __name__ == '__main__':
     # video frames (take videos from DAVIS-2017 as examples)
-    video_path_list = glob.glob(os.path.join('/ssd1/gaomingqi/datasets/davis/JPEGImages/480p/horsejump-high', '*.jpg'))
+    video_path_list = glob.glob(os.path.join(
+        r'C:/Users/mellithy/magicRoto/MR_MagicRotoSelectorLive_avenger/source_MR_MagicRotoSelectorLive_avenger/',
+        '*.png'))
     video_path_list.sort()
+    print(video_path_list)
     # load frames
     frames = []
     for video_path in video_path_list:
-        frames.append(np.array(Image.open(video_path).convert('RGB')))
+        frames.append(Image.open(video_path).convert('RGB'))
     frames = np.stack(frames, 0)  # T, H, W, C
     # load first frame annotation
-    first_frame_path = '/ssd1/gaomingqi/datasets/davis/Annotations/480p/horsejump-high/00000.png'
+    first_frame_path = r'C:/Users/mellithy/magicRoto/MR_MagicRotoSelectorLive_avenger/20231213/mask.0001.png'
     first_frame_annotation = np.array(Image.open(first_frame_path).convert('P'))  # H, W, C
 
     # ------------------------------------------------------------------------------------
@@ -158,23 +170,24 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------------------------
     # 1/4: set checkpoint and device
     device = 'cuda:0'
-    XMEM_checkpoint = '/ssd1/gaomingqi/checkpoints/XMem-s012.pth'
+    XMEM_checkpoint = r'D:/track_anything_project/Track-Anything/checkpoints/XMem-s012.pth'
     # SAM_checkpoint= '/ssd1/gaomingqi/checkpoints/sam_vit_h_4b8939.pth'
     # model_type = 'vit_h'
     # ------------------------------------------------------------------------------------
     # 2/4: initialise inpainter
-    tracker = BaseTracker(XMEM_checkpoint, device, None, device)
+    tracker = BaseTracker(XMEM_checkpoint, device)
     # ------------------------------------------------------------------------------------
     # 3/4: for each frame, get tracking results by tracker.track(frame, first_frame_annotation)
     # frame: numpy array (H, W, C), first_frame_annotation: numpy array (H, W), leave it blank when tracking begins
-    painted_frames = []
+    individual_masks_list = []
     for ti, frame in enumerate(frames):
         if ti == 0:
-            mask, prob, painted_frame = tracker.track(frame, first_frame_annotation)
+            final_combined_mask, individual_masks = tracker.track(frame, first_frame_annotation)
             # mask: 
         else:
-            mask, prob, painted_frame = tracker.track(frame)
-        painted_frames.append(painted_frame)
+            final_combined_mask, individual_masks = tracker.track(frame)
+
+        individual_masks_list.append(individual_masks)
     # ----------------------------------------------
     # 3/4: clear memory in XMEM for the next video
     tracker.clear_memory()
@@ -183,13 +196,15 @@ if __name__ == '__main__':
     # ----------------------------------------------
     print(f'max memory allocated: {torch.cuda.max_memory_allocated() / (2 ** 20)} MB')
     # set saving path
-    save_path = '/ssd1/gaomingqi/results/TAM/blackswan'
+    save_path = 'C:/Users/mellithy/magicRoto/MR_MagicRotoSelectorLive_avenger/20231213/tracking_ouput/'
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     # save
-    for painted_frame in progressbar.progressbar(painted_frames):
-        painted_frame = Image.fromarray(painted_frame)
-        painted_frame.save(f'{save_path}/{ti:05d}.png')
+    for ti, im in enumerate(individual_masks_list):
+        # painted_frame = tracker.paint_masks_on_image(im)
+        create_exr_image(im, f'{save_path}/{ti:05d}')
+        # painted_frame = Image.fromarray(painted_frame)
+        # painted_frame.save(f'{save_path}/{ti:05d}.png')
 
     # tracker.clear_memory()
     # for ti, frame in enumerate(frames):

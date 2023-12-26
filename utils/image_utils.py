@@ -13,14 +13,157 @@ from PySide2.QtGui import QImage, QPainter, QColor, QPolygon, QPen
 
 from magicroto.utils.logger import logger
 
-roto_colors = [
-    (128, 0, 128),  # Purple
-    (0, 128, 0),  # Green
-    (0, 0, 255),  # Blue
-    (255, 0, 0),  # Red
-    (255, 255, 0),  # Yellow
-    (0, 255, 255)  # Cyan
-]
+
+def colormap(rgb=True):
+    """
+    Generates a colormap.
+
+    @param rgb: Boolean indicating whether the colormap is in RGB format.
+    @return: A list of colors.
+    """
+    color_list = np.array(
+        [
+            0.000, 0.000, 0.000,
+            1.000, 1.000, 1.000,
+            1.000, 0.498, 0.313,
+            0.392, 0.581, 0.929,
+            0.000, 0.447, 0.741,
+            0.850, 0.325, 0.098,
+            0.929, 0.694, 0.125,
+            0.494, 0.184, 0.556,
+            0.466, 0.674, 0.188,
+            0.301, 0.745, 0.933,
+            0.635, 0.078, 0.184,
+            0.300, 0.300, 0.300,
+            0.600, 0.600, 0.600,
+            1.000, 0.000, 0.000,
+            1.000, 0.500, 0.000,
+            0.749, 0.749, 0.000,
+            0.000, 1.000, 0.000,
+            0.000, 0.000, 1.000,
+            0.667, 0.000, 1.000,
+            0.333, 0.333, 0.000,
+            0.333, 0.667, 0.000,
+            0.333, 1.000, 0.000,
+            0.667, 0.333, 0.000,
+            0.667, 0.667, 0.000,
+            0.667, 1.000, 0.000,
+            1.000, 0.333, 0.000,
+            1.000, 0.667, 0.000,
+            1.000, 1.000, 0.000,
+            0.000, 0.333, 0.500,
+            0.000, 0.667, 0.500,
+            0.000, 1.000, 0.500,
+            0.333, 0.000, 0.500,
+            0.333, 0.333, 0.500,
+            0.333, 0.667, 0.500,
+            0.333, 1.000, 0.500,
+            0.667, 0.000, 0.500,
+            0.667, 0.333, 0.500,
+            0.667, 0.667, 0.500,
+            0.667, 1.000, 0.500,
+            1.000, 0.000, 0.500,
+            1.000, 0.333, 0.500,
+            1.000, 0.667, 0.500,
+            1.000, 1.000, 0.500,
+            0.000, 0.333, 1.000,
+            0.000, 0.667, 1.000,
+            0.000, 1.000, 1.000,
+            0.333, 0.000, 1.000,
+            0.333, 0.333, 1.000,
+            0.333, 0.667, 1.000,
+            0.333, 1.000, 1.000,
+            0.667, 0.000, 1.000,
+            0.667, 0.333, 1.000,
+            0.667, 0.667, 1.000,
+            0.667, 1.000, 1.000,
+            1.000, 0.000, 1.000,
+            1.000, 0.333, 1.000,
+            1.000, 0.667, 1.000,
+            0.167, 0.000, 0.000,
+            0.333, 0.000, 0.000,
+            0.500, 0.000, 0.000,
+            0.667, 0.000, 0.000,
+            0.833, 0.000, 0.000,
+            1.000, 0.000, 0.000,
+            0.000, 0.167, 0.000,
+            0.000, 0.333, 0.000,
+            0.000, 0.500, 0.000,
+            0.000, 0.667, 0.000,
+            0.000, 0.833, 0.000,
+            0.000, 1.000, 0.000,
+            0.000, 0.000, 0.167,
+            0.000, 0.000, 0.333,
+            0.000, 0.000, 0.500,
+            0.000, 0.000, 0.667,
+            0.000, 0.000, 0.833,
+            0.000, 0.000, 1.000,
+            0.143, 0.143, 0.143,
+            0.286, 0.286, 0.286,
+            0.429, 0.429, 0.429,
+            0.571, 0.571, 0.571,
+            0.714, 0.714, 0.714,
+            0.857, 0.857, 0.857
+        ]
+    ).astype(np.float32).reshape((-1, 3)) * 255
+    return color_list if rgb else color_list[:, ::-1]
+
+
+color_list = colormap().astype('uint8').tolist()
+
+
+def numpy_to_pil(numpy_array):
+    """
+    Converts a NumPy array to a PIL.Image.
+
+    @param numpy_array: The NumPy array to be converted.
+    @return: PIL.Image representation of the NumPy array.
+    """
+    if numpy_array.dtype == np.uint8:
+        return Image.fromarray(numpy_array)
+    else:
+        raise TypeError("NumPy array must be of type uint8")
+
+
+def numpy_to_qimage(numpy_array):
+    """
+    Converts a NumPy array to a QImage.
+
+    @param numpy_array: The NumPy array to be converted.
+    @return: QImage representation of the NumPy array.
+    """
+    if numpy_array.dtype == np.uint8:
+        height, width, channel = numpy_array.shape
+        if channel == 3:  # RGB
+            format_type = QImage.Format.Format_RGB888
+        elif channel == 4:  # RGBA
+            format_type = QImage.Format.Format_RGBA8888
+        else:
+            raise ValueError("NumPy array must have 3 (RGB) or 4 (RGBA) channels")
+        return QImage(numpy_array.data, width, height, numpy_array.strides[0], format_type)
+    else:
+        raise TypeError("NumPy array must be of type uint8")
+
+
+def image_to_numpy(image):
+    """
+    Converts a PIL.Image or QImage to a NumPy array.
+
+    @param image: The image to be converted. Can be either PIL.Image or QImage.
+    @return: NumPy array representation of the image.
+    """
+    if isinstance(image, Image.Image):
+        return np.array(image)
+    elif isinstance(image, QImage):
+        # Convert QImage to NumPy array
+        qimage = image.convertToFormat(QImage.Format.Format_RGBA8888)
+        width = qimage.width()
+        height = qimage.height()
+        ptr = qimage.bits()
+        ptr.setsize(height * width * 4)
+        return np.array(ptr).reshape((height, width, 4))
+    else:
+        raise TypeError("Unsupported image type")
 
 
 def convert_qimage_to_pil_image(qimage: QImage) -> Image.Image:
@@ -98,7 +241,7 @@ def overlay_boolean_arrays_on_qimage(base_image: QImage, boolean_arrays, draw_co
         boolean_array = fill_holes_in_boolean_array(boolean_array)
 
         # color = random.choice(roto_colors)
-        color = roto_colors[i % len(roto_colors)]
+        color = color_list[i % len(color_list)]
         color = QColor(*color)  # RGBA: Semi-transparent purple
         painter.setPen(color)
         for i in range(len(boolean_array)):
@@ -155,7 +298,6 @@ def create_image_rgb(array_list):
         raise ValueError("Array list must contain 1 or 3 arrays.")
 
 
-
 def create_image(bool_array, color):
     bool_array = fill_holes_in_boolean_array(bool_array)
     rows, cols = len(bool_array), len(bool_array[0])
@@ -182,7 +324,7 @@ def overlay_boolean_arrays_on_pil(base_image: Image, boolean_arrays, draw_contou
     for i, boolean_array in enumerate(boolean_arrays):
         boolean_array = fill_holes_in_boolean_array(boolean_array)  # Assuming you have this function
 
-        color = roto_colors[i % len(roto_colors)]
+        color = color_list[i % len(color_list)]
         for row in range(len(boolean_array)):
             for col in range(len(boolean_array[row])):
                 if boolean_array[row][col]:
