@@ -8,6 +8,8 @@ import torch
 from PIL import Image
 from segment_anything import sam_model_registry, SamPredictor
 from magicroto.utils.logger import logger
+from magicroto.utils.image_utils import get_mask_label_grid
+from torch.nn import functional as F
 
 # from mask_painter import mask_painter
 
@@ -48,6 +50,60 @@ class BaseSegmenter:
         self.predictor.reset_image()
         self.embedded = False
 
+
+    @torch.no_grad()
+    def resize_mask(self, mask):
+        """
+        Resize the mask tensor to match the shape of logits used in SAM model.
+
+        @param mask: Input mask tensor.
+        @return: Resized mask tensor.
+        """
+        # Visualize original mask
+        # visualize_mask(mask, 'original_mask.png')
+        # Convert to a PyTorch tensor if it's a NumPy array
+        if isinstance(mask, np.ndarray):
+            mask = torch.from_numpy(mask)
+
+        # Ensure mask has a channel dimension
+        if mask.dim() == 2:
+            mask = mask.unsqueeze(0)  # Adds channel dimension
+
+        # Resize mask to 256x256
+        resized_mask = F.interpolate(mask.unsqueeze(0), size=(256, 256), mode='nearest').squeeze(0)
+
+        # Visualize resized mask
+        # visualize_mask(resized_mask, 'resized_mask.png')
+
+        return resized_mask
+
+    @torch.no_grad()
+    def sam_refinement(self, frame, logits, mode='point', num_points=5, erosion_size=3, random_points=True):
+        """
+        refine segmentation results with mask prompt
+        """
+        # convert to 1, 256, 256
+        self.set_image(frame)
+        # mode = 'mask'
+        # Convert frame to tensor and get its size
+
+        # frame = Image.open(frame).convert('RGB')
+        if mode == 'mask':
+            prompts = {'mask_input': self.resize_mask(logits)}  # 1 256 256
+        else:
+            points, labels = get_mask_label_grid(logits,
+                                                 num_points=num_points, erosion_size=erosion_size, random_points=random_points)
+            prompts = {
+                'point_coords': np.array(points),
+                'point_labels': np.array(labels),
+            }
+        # masks (n, h, w), scores (n,), logits (n, 256, 256)
+        masks, scores, logits = self.predict(prompts, mode, multimask=True)
+
+        self.reset_image()
+        return masks.astype(np.uint8)
+
+
     def predict(self, prompts, mode, multimask=True):
         """
         image: numpy array, h, w, 3
@@ -75,8 +131,11 @@ class BaseSegmenter:
                                                            mask_input=prompts['mask_input'],
                                                            multimask_output=multimask)
         else:
-            raise ("Not implement now!")
+            raise ("Not implement yet!")
         # masks (n, h, w), scores (n,), logits (n, 256, 256)
+        print("Shape of masks:", masks.shape)
+        print("Shape of scores:", scores.shape)
+        print("Shape of logits:", logits.shape)
         return masks, scores, logits
 
 
@@ -126,7 +185,7 @@ if __name__ == "__main__":
         im = Image.fromarray(im, 'L')  # 'L' for grayscale
         im.save(f'mask{i}.png')
 
-        create_svg_from_array(m, f'mask{i}.svg')
+        # create_svg_from_array(m, f'mask{i}.svg')
     #
     # painted_image = mask_painter(image, masks[np.argmax(scores)].astype('uint8'), background_alpha=0.8)
     # painted_image = cv2.cvtColor(painted_image, cv2.COLOR_RGB2BGR)  # numpy array (h, w, 3)

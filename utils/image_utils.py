@@ -1,9 +1,15 @@
+import glob
 import math
 import os
 import random
+import re
+from collections import OrderedDict
 
 import cv2
+
+
 import numpy as np
+
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageEnhance
@@ -110,6 +116,50 @@ def colormap(rgb=True):
 
 
 color_list = colormap().astype('uint8').tolist()
+
+
+def load_images(path, mode='RGB', frame_range=None, silent=False, frames=None, return_dict=False):
+    """
+    Load images from a wildcard path and convert them to a numpy array.
+
+    @param path: Wildcard path to the images.
+    @param mode: Mode for converting images ('RGB' or 'P').
+    @param frame_range: Frame range (1001, 1100).
+    @return: Numpy array of images.
+    """
+    images = []
+    frame_numbers = []
+    if frame_range is not None or frames is not None:
+
+        frames = frames or range(frame_range[0], frame_range[1] + 1)
+        for f in frames:
+            image_path = path.replace('.%04d.', f'.{f:04d}.')
+            if not os.path.exists(image_path) and not silent:
+                logger.warning(f"Dose not exists\n\t{image_path}")
+                continue
+            images.append(Image.open(image_path).convert(mode))
+            frame_numbers.append(f)
+
+    else:
+        image_paths = glob.glob(path.replace('%04d', '*'))
+        image_paths.sort()
+
+        images = [Image.open(image_path).convert(mode) for image_path in image_paths]
+
+        pattern = r"\.(\d{4})\."
+        for path in image_paths:
+            match = re.search(pattern, path)
+            if match:
+                frame_number = int(match.group(1))
+                frame_numbers.append(frame_number)
+
+    # logger.debug(images)
+    if images:
+        np_images = np.stack(images, 0)
+        if return_dict:
+            return OrderedDict(zip(frame_numbers, np_images))
+        else:
+            return np_images
 
 
 def numpy_to_pil(numpy_array):
@@ -393,6 +443,88 @@ def randomly_modify_image(image):
     enhancer = ImageEnhance.Brightness(image)
     factor = random.uniform(0.5, 1.5)
     return enhancer.enhance(factor)
+
+
+def get_mask_label_grid(masks, num_points=10, erosion_size=10, random_points=True):
+    """
+    Creates a grid of points or random points within the bounding box of the mask,
+    labels points based on mask coverage, and visualizes these points on an image.
+
+    @param masks: List of mask arrays or a single numpy array mask.
+    @param num_points: Number of points along each dimension in the grid or number of random points.
+    @param erosion_size: Size of the kernel used for erosion.
+    @param random_points: If True, points are randomly placed. If False, points are placed on a grid.
+    """
+
+    def get_bounding_box(mask, padding):
+        rows = np.any(mask, axis=1)
+        cols = np.any(mask, axis=0)
+        min_row, max_row = np.where(rows)[0][[0, -1]]
+        min_col, max_col = np.where(cols)[0][[0, -1]]
+        return max(min_row - padding, 0), max(min_col - padding, 0), min(max_row + padding, mask.shape[0]), min(
+            max_col + padding, mask.shape[1])
+
+    def visualize_points(image, points, labels, point_size=2):
+        """
+        Visualize grid points on the image. Points labeled 1 are green, and points labeled 0 are red.
+        """
+        for point, label in zip(points, labels):
+            x, y = point[0], image.shape[0] - point[1]
+            color = (0, 255, 0) if label == 1 else (0, 0, 255)  # Green for 1, Red for 0
+            cv2.circle(image, (x, y), point_size, color, -1)
+
+    if isinstance(masks, np.ndarray):
+        masks = [masks]
+
+    # Combine masks to find overall mask
+    combined_mask = np.any(np.array(masks), axis=0)
+
+    # Erode the mask
+    kernel = np.ones((erosion_size, erosion_size), np.uint8)
+    eroded_mask = cv2.erode(combined_mask.astype(np.uint8), kernel).astype(np.uint8)
+
+    combined_mask = (combined_mask * 255).astype(np.uint8)
+    eroded_mask = (eroded_mask * 255).astype(np.uint8)
+    # Image.fromarray(combined_mask).save('combined_mask.png')
+    # Image.fromarray(eroded_mask).save('eroded_mask.png')
+
+    # Get bounding box
+    min_row, min_col, max_row, max_col = get_bounding_box(combined_mask, erosion_size)
+
+    if random_points:
+        white_points = [(x, eroded_mask.shape[0] - y) for x in range(min_col, max_col) for y in range(min_row, max_row)
+                        if
+                        eroded_mask[y, x] > 0]
+        black_points = [(x, eroded_mask.shape[0] - y) for x in range(min_col, max_col) for y in range(min_row, max_row)
+                        if
+                        combined_mask[y, x] == 0]
+        # Randomly select points
+        selected_white = random.sample(white_points, k=num_points)
+        selected_black = random.sample(black_points, k=num_points)
+        points = selected_white + selected_black
+        labels = [1] * num_points + [0] * num_points
+    else:
+        points = []
+        labels = []
+        # Generate grid points
+        rows = np.linspace(min_row, max_row, num_points, dtype=int)
+        cols = np.linspace(min_col, max_col, num_points, dtype=int)
+
+        for row in rows:
+            for col in cols:
+                point = (col, eroded_mask.shape[0] - row)  # Point coordinates
+                label = 1 if eroded_mask[row, col] else 0
+                points.append(point)
+                labels.append(label)
+
+    # Visualize points on a blank image
+    vis_image = np.zeros((eroded_mask.shape[0], eroded_mask.shape[1], 3), dtype=np.uint8) * 255
+    visualize_points(vis_image, points, labels)
+
+    # Save visualization image
+    cv2.imwrite('vis.png', vis_image)
+
+    return points, labels
 
 
 class ImageSplitMerge:

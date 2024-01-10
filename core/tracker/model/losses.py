@@ -1,8 +1,8 @@
+from collections import defaultdict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from collections import defaultdict
 
 
 def dice_loss(input_mask, cls_gt):

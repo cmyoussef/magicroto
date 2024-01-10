@@ -3,13 +3,13 @@ from datetime import datetime
 
 import nuke
 
-from magicroto.config.config_utils import mg_inpaint_path
+from magicroto.config.config_utils import mg_tracking_path
 from magicroto.gizmos.core.gizmobase import GizmoBase
 from magicroto.utils.icons import Icons
 from magicroto.utils.logger import logger_level, logger
 
 
-class MagicRotoInPaint(GizmoBase):
+class MagicRotoTracker(GizmoBase):
     @property
     def input_node(self):
         return self.get_node("image", 'Input')
@@ -28,14 +28,15 @@ class MagicRotoInPaint(GizmoBase):
         if not self._initialized:
             self.is_client_connected = False  # Flag to track connection status
 
-            self.args['script_path'] = mg_inpaint_path
+            self.args['script_path'] = mg_tracking_path
             self.populate_ui()
 
         self.args = {'python_path': self.args.get('python_path'),
                      'cache_dir': self.args.get('cache_dir'),
-                     'E2FGVI_checkpoint': os.path.join(self.args.get('cache_dir'), 'E2FGVI-HQ-CVPR22.pth'),
+                     'XMEM_checkpoint': os.path.join(self.args.get('cache_dir'), 'XMem-s012.pth'),
+                     'SAM_checkpoint': os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth'),
                      'device': "cuda:0",
-                     'script_path': mg_inpaint_path}
+                     'script_path': mg_tracking_path}
 
         self.gizmo.begin()
         _ = self.input_node
@@ -60,8 +61,9 @@ class MagicRotoInPaint(GizmoBase):
         self.args['image_path'] = image_path
 
         mask_path = self.add_padding(self.get_init_img_path('mask'))
-        self.writeInput(mask_path, self.mask_node, frame_range=(start_frame, end_frame))
+        self.writeInput(mask_path, self.mask_node, frame_range=None)
         self.args['mask_path'] = mask_path
+        self.args['mask_frames'] = [nuke.frame()]
         self.args['output'] = self.output_file_path
 
     def on_execute(self):
@@ -72,7 +74,7 @@ class MagicRotoInPaint(GizmoBase):
 
     @property
     def output_file_path(self):
-        file_name = f'inPainted.png'
+        file_name = f'track.exr'
         output_dir_path = os.path.join(self.get_output_dir(), f'{datetime.now().strftime("%Y%m%d")}')
         output_dir_path = output_dir_path.replace('\\', '/')
         os.makedirs(output_dir_path, exist_ok=True)
@@ -89,14 +91,14 @@ class MagicRotoInPaint(GizmoBase):
 
         self.create_execute_buttons()
 
+        self.reload_button()
+
         if not self.gizmo.knob('interrupt_btn'):
             interrupt_btn = nuke.PyScript_Knob('interrupt_btn', f'Force terminate All{Icons.explosion_symbol}')
             interrupt_btn.setFlag(nuke.STARTLINE)
             self.gizmo.addKnob(interrupt_btn)
         self.gizmo.knob('interrupt_btn').setCommand(
             f'import {self.base_class};{self.__class__.__module__}.{self.__class__.__name__}.run_instance_method("on_interrupt")')
-
-        self.reload_button()
 
         status_bar = self.status_bar
         self.set_status(running=False)
@@ -105,5 +107,5 @@ class MagicRotoInPaint(GizmoBase):
 
 if __name__ == '__main__':
     # Create a NoOp node on which we'll add the knobs
-    node = MagicRotoInPaint()
+    node = MagicRotoTracker()
     node.showControlPanel()

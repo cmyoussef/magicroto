@@ -169,7 +169,6 @@ class MagicRotoSelectorLive(GizmoBase):
         grade_node['multiply'].setSingleValue(False)
         self._force_evaluate_node(grade_node)
 
-        channels = ['red', 'green', 'blue']
         for i in range(1, 4):
             knobLabel = '{:02d}'.format(i)
             knobLabel = 'RGB'[i - 1]
@@ -185,9 +184,15 @@ class MagicRotoSelectorLive(GizmoBase):
             grade_node['multiply'].setExpression(f"{knobName}", i - 1)
 
         # region frame range
-        self.add_divider('Trackers')
+        self.add_divider('Frame Range')
 
         self.create_frame_range_knobs()
+
+        if not self.gizmo.knob('keys_knob'):
+            keys_knob = nuke.Int_Knob('keys_knob', f'Keys {Icons.key_symbol}')
+            keys_knob.setFlag(nuke.STARTLINE)
+            # use_external_execute.setFlag(nuke.DISABLED)
+            self.gizmo.addKnob(keys_knob)
 
         if not self.gizmo.knob('cache_frame_btn_knob'):
             cn_button = nuke.PyScript_Knob('cache_frame_btn_knob', f'Cache input {Icons.download_symbol}')
@@ -234,6 +239,12 @@ class MagicRotoSelectorLive(GizmoBase):
         multi_frame_data = {}
         start_frame, end_frame = self.frame_range
         logger.debug(f'self.frame_range {self.frame_range}')
+
+        # set keyFrames
+        keys = self.gizmo.knob('keys_knob')
+        # Make sure the knob is set to be animated
+        keys.setAnimated()
+
         for i in range(start_frame, end_frame+1):
             # nuke.frame(i)
             # nuke.execute(self.gizmo, i, i)
@@ -264,6 +275,7 @@ class MagicRotoSelectorLive(GizmoBase):
                 }
 
             multi_frame_data[i] = frame_data
+            keys.setValueAt(i, i)
 
         self.attempt_to_send(multi_frame_data)
 

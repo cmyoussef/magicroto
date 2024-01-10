@@ -1,7 +1,7 @@
 import math
-import numpy as np
-import torch
 from typing import Optional
+
+import torch
 
 
 def get_similarity(mk, ms, qk, qe):

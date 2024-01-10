@@ -1,6 +1,11 @@
 import logging
 import threading
 
+try:
+    from tqdm import tqdm
+except ModuleNotFoundError:
+    tqdm = None
+
 
 class ColorfulFormatter(logging.Formatter):
     format_dict = {
@@ -19,36 +24,51 @@ class ColorfulFormatter(logging.Formatter):
         return super().format(record)
 
 
-class SingletonLogger:
-    _instance_lock = threading.Lock()
-    _instance = None
+class SingletonLogger(logging.Logger):
+    _instances = {}
+    _lock = threading.Lock()
 
-    @staticmethod
-    def get_instance():
-        if SingletonLogger._instance is None:
-            with SingletonLogger._instance_lock:
-                if SingletonLogger._instance is None:
-                    SingletonLogger._instance = SingletonLogger()
-        return SingletonLogger._instance
+    @classmethod
+    def get_instance(cls, name='MagicRoto'):
+        if name not in cls._instances:
+            with cls._lock:
+                if name not in cls._instances:
+                    logging.setLoggerClass(cls)  # Set the custom logger class
+                    logger = logging.getLogger(name)
+                    logger.setLevel('DEBUG')
+                    ch = logging.StreamHandler()
+                    ch.setLevel('DEBUG')
+                    formatter = ColorfulFormatter(
+                        "%(levelname)s [%(asctime)s - %(name)s:%(module)s:%(lineno)s - %(funcName)s()] || %(message)s",
+                        datefmt="%d-%b-%y %H:%M:%S")
+                    ch.setFormatter(formatter)
+                    logger.addHandler(ch)
+                    cls._instances[name] = logger
+        return cls._instances[name]
 
-    def __init__(self, name='EasyRoto'):
-        self.logger = logging.getLogger(name)
-        self.logger.propagate = False
-        if not self.logger.handlers:  # This check prevents adding multiple handlers
-            self.logger.setLevel('DEBUG')
-            ch = logging.StreamHandler()
-            ch.setLevel('DEBUG')
-            formatter = ColorfulFormatter(
-                "%(levelname)s [%(asctime)s - %(name)s:%(module)s:%(lineno)s - %(funcName)s()] || %(message)s",
-                datefmt="%d-%b-%y %H:%M:%S")
-            ch.setFormatter(formatter)
-            for i in self.logger.handlers:
-                if str(type(i)) == str(type(self.ch)):
-                    self.logger.removeHandler(i)
-            self.logger.addHandler(ch)
+    # Add the progress method directly to the logger
+    def progress(self, iterable, desc="Processing", level=logging.INFO, **kwargs):
+        if tqdm is None:
+            for item in iterable:
+                yield item
+        # Get the color corresponding to the log level
+        bar_color = ColorfulFormatter.format_dict.get(level, "\033[0m")  # Default to no color
+
+        # Custom tqdm class to change color
+        class ColoredTqdm(tqdm):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+
+            def format_meter(self, *args, **kwargs):
+                return bar_color + super().format_meter(*args, **kwargs) + '\033[0m'
+
+        self.log(logging.DEBUG, f"{desc} started.")
+        for item in ColoredTqdm(iterable, desc=desc, **kwargs):
+            yield item
+        self.log(logging.DEBUG, f"{desc} completed.")
 
 
-logger = SingletonLogger.get_instance().logger
+logger = SingletonLogger.get_instance()
 logger_level = {
     'critical': 50,
     'error': 40,
@@ -58,7 +78,12 @@ logger_level = {
     'notset': 0
 }
 
-logger.setLevel(20)
+logger.setLevel(10)
 # Example usage
 if __name__ == "__main__":
-    logger.debug("This is a debug message.")
+    import time
+
+    for _ in logger.progress(range(100), desc="Example Progress"):
+        time.sleep(.1)
+        # Your processing code here
+        pass

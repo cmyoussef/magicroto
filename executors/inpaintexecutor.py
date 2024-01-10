@@ -1,9 +1,6 @@
 import argparse
-import glob
-import os
 import sys
 
-import numpy as np
 from PIL import Image
 
 paths = ['D:/track_anything_project', 'D:/track_anything_project/magicroto/core']
@@ -11,6 +8,7 @@ for p in paths:
     if p not in sys.path:
         sys.path.append(p)
 
+from magicroto.utils import image_utils
 from magicroto.core.inpainter.base_inpainter import BaseInpainter
 from magicroto.utils.logger import logger
 
@@ -44,29 +42,6 @@ class InPaintExecutor:
         parser.add_argument('--end_frame', type=int, default=1001, help='Last frame to paint')
         return parser
 
-    @staticmethod
-    def load_images(path, mode='RGB', frame_range=None):
-        """
-        Load images from a wildcard path and convert them to a numpy array.
-
-        @param path: Wildcard path to the images.
-        @param mode: Mode for converting images ('RGB' or 'P').
-        @param frame_range: Frame range (1001, 1100).
-        @return: Numpy array of images.
-        """
-        if frame_range is not None:
-            images = []
-            for f in range(frame_range[0], frame_range[1]+1):
-                image_path = path.replace('.%04d.', f'.{f:04d}.')
-                images.append(Image.open(image_path).convert(mode))
-
-        else:
-            image_paths = glob.glob(path.replace('%04d', '*'))
-            image_paths.sort()
-            images = [Image.open(image_path).convert(mode) for image_path in image_paths]
-        logger.debug(images)
-        return np.stack(images, 0)
-
     def execute_inpainting(self, frames, masks, output, ratio=1):
         """
         Execute inpainting on provided frames and masks.
@@ -92,7 +67,7 @@ if __name__ == '__main__':
     executor = InPaintExecutor(args.E2FGVI_checkpoint, args.device)
     logger.setLevel(int(args.logger_level) or 20)
     frame_range = int(args.start_frame), int(args.end_frame)
-    np_frames = executor.load_images(args.image_path, mode='RGB', frame_range=frame_range)
-    np_masks = executor.load_images(args.mask_path, mode='P', frame_range=frame_range)
+    np_frames = image_utils.load_images(args.image_path, mode='RGB', frame_range=frame_range)
+    np_masks = image_utils.load_images(args.mask_path, mode='P', frame_range=frame_range)
 
     executor.execute_inpainting(np_frames, np_masks, args.output, args.ratio)
