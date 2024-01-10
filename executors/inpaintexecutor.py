@@ -1,9 +1,25 @@
 import argparse
 import sys
+import os
+import inspect
 
 from PIL import Image
 
-paths = ['D:/track_anything_project', 'D:/track_anything_project/magicroto/core']
+
+# TODO: if it's installed with envVar you do not need that
+# <editor-fold desc="append module">
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+base_name = os.path.basename(current_dir)
+module_dir = os.path.dirname(current_dir)
+safe_brake = 0
+while safe_brake < 100:
+    base_name = os.path.basename(module_dir)
+    module_dir = os.path.dirname(module_dir)
+    if base_name == 'magicroto':
+        break
+    safe_brake += 1
+
+paths = [module_dir]
 for p in paths:
     if p not in sys.path:
         sys.path.append(p)

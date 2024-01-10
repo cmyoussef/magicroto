@@ -117,7 +117,7 @@ class Pointer(QtWidgets.QWidget, SingletonByNode):
                     self.labels.pop(index)
                     self.points.pop(index)
                     break
-
+                
         elif self.scaled_image and 0 <= x <= self.canvas_width and 0 <= y <= self.canvas_height:
             self.points.append((scaled_x, scaled_y))
             label = 0 if modifiers == QtCore.Qt.AltModifier else 1

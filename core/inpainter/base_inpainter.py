@@ -1,5 +1,7 @@
 import glob
 import os
+import inspect
+import sys
 
 import cv2
 import numpy as np
@@ -8,6 +10,17 @@ import yaml
 from PIL import Image
 from tqdm import tqdm
 
+# <editor-fold desc="append module">
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+base_name = os.path.basename(current_dir)
+module_dir = os.path.dirname(current_dir)
+print(f'module_dir:{module_dir}\ncurrent_dir:{current_dir}')
+paths = [module_dir]
+for p in paths:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+# </editor-fold>
+        
 from inpainter.model import e2fgvi_hq
 from inpainter.util.tensor_util import resize_frames, resize_masks
 
