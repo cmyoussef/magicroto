@@ -264,8 +264,17 @@ def get_contours(array, retrieval_mode=cv2.RETR_EXTERNAL, approximation=cv2.CHAI
 
 
 def fill_holes_in_boolean_array(boolean_array, kernel_size=5):
-    # Convert the boolean array to uint8
-    img = np.uint8(boolean_array) * 255
+    # Ensure the input is a numpy array
+    input_array = np.array(boolean_array)
+
+    # Handle boolean arrays
+    if input_array.dtype == bool:
+        img = np.uint8(input_array) * 255
+    # Handle integer arrays
+    elif np.issubdtype(input_array.dtype, np.integer):
+        img = np.uint8(input_array != 0) * 255
+    else:
+        raise ValueError("Input array must be either boolean or integer type")
 
     # Create a kernel for the morphological operation
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
