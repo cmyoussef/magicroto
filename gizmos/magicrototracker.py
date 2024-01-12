@@ -74,7 +74,7 @@ class MagicRotoTracker(GizmoBase):
 
     @property
     def output_file_path(self):
-        file_name = f'track.exr'
+        file_name = f'track.png'
         output_dir_path = os.path.join(self.get_output_dir(), f'{datetime.now().strftime("%Y%m%d")}')
         output_dir_path = output_dir_path.replace('\\', '/')
         os.makedirs(output_dir_path, exist_ok=True)

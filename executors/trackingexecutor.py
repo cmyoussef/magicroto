@@ -123,7 +123,10 @@ class TrackingExecutor:
             # if self.refine_mode is not None and self.sam_model:
             if self.sam_model:
                 individual_masks = self.sam_model.sam_refinement(np_frame, final_combined_mask)
-            painter.create_exr_image(individual_masks, self.args['output'].replace('.%04d.', f'.{start:04d}.'))
+            img_path = self.args['output'].replace('.%04d.', f'.{start:04d}.')
+            img = image_utils.create_image_rgb(final_combined_mask)
+            img.save(img_path)
+            # painter.create_exr_image(individual_masks,img_path)
 
             iterator = 1 if start < end else -1
             # Example processing: Loop through each frame in the range
@@ -135,7 +138,11 @@ class TrackingExecutor:
                 if self.sam_model:
                     logger.debug(f"refining frame using {self.refine_mode}")
                     individual_masks = self.sam_model.sam_refinement(np_frame, final_combined_mask)
-                painter.create_exr_image(individual_masks, self.args['output'].replace('.%04d.', f'.{frame:04d}.'))
+
+                img_path = self.args['output'].replace('.%04d.', f'.{frame:04d}.')
+                img = image_utils.create_image_rgb(final_combined_mask)
+                img.save(img_path)
+                # painter.create_exr_image(individual_masks, img_path)
                 # logger.debug(f"    Processing frame {frame}")
 
         self.tracker.clear_memory()

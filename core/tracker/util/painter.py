@@ -1,6 +1,10 @@
 # paint masks, contours, or points on images, with specified colors
-import Imath
-import OpenEXR
+try:
+    import Imath
+    import OpenEXR
+except:
+    print("Error importing OpenEXR")
+
 import cv2
 import numpy as np
 from PIL import Image
