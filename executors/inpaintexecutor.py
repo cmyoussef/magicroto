@@ -28,6 +28,7 @@ for p in paths:
 from magicroto.core.inpainter.base_inpainter import BaseInpainter
 from magicroto.utils.logger import logger
 
+from magicroto.utils import image_utils
 
 class InPaintExecutor:
     def __init__(self, E2FGVI_checkpoint, device):

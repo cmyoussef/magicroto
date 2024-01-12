@@ -137,7 +137,7 @@ class TrackingExecutor:
             if self.sam_model:
                 individual_masks = self.sam_model.sam_refinement(np_frame, final_combined_mask)
             img_path = self.args['output'].replace('.%04d.', f'.{start:04d}.')
-            img = image_utils.create_image_rgb(final_combined_mask)
+            img = image_utils.create_image_rgb([final_combined_mask])
             img.save(img_path)
             # painter.create_exr_image(individual_masks,img_path)
 
@@ -153,7 +153,7 @@ class TrackingExecutor:
                     individual_masks = self.sam_model.sam_refinement(np_frame, final_combined_mask)
 
                 img_path = self.args['output'].replace('.%04d.', f'.{frame:04d}.')
-                img = image_utils.create_image_rgb(final_combined_mask)
+                img = image_utils.create_image_rgb([final_combined_mask])
                 img.save(img_path)
                 # painter.create_exr_image(individual_masks, img_path)
                 # logger.debug(f"    Processing frame {frame}")

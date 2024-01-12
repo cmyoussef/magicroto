@@ -345,7 +345,7 @@ def create_image_rgb(array_list):
         return Image.fromarray((255 * np.clip(arr, 0, 1)).astype('uint8'), 'L')
 
     else:
-        raise ValueError("Array list must contain 1 or 3 arrays.")
+        raise ValueError(f"Array list must contain 1 or 3 arrays. current shape is {len(array_list)}")
 
 
 def create_image(bool_array, color):

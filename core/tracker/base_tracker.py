@@ -8,9 +8,9 @@ from PIL import Image
 from torchvision import transforms
 
 # from tools.painter import mask_painter, create_exr_image
-from tracker.model.network import XMem
-from tracker.util.mask_mapper import MaskMapper
-from tracker.util.range_transform import im_normalization
+from .model.network import XMem
+from .util.mask_mapper import MaskMapper
+from .util.range_transform import im_normalization
 # Custom imports
 from .inference.inference_core import InferenceCore
 
