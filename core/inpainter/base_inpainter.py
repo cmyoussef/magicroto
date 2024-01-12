@@ -1,12 +1,7 @@
 import glob
-import os
-<<<<<<< 11d5fb9cbe0cc563420693ae955ab217f70c0661
 import inspect
+import os
 import sys
-=======
-import sys 
-import inspect 
->>>>>>> Auto commit message
 
 import cv2
 import numpy as np
@@ -25,11 +20,12 @@ for p in paths:
     if p not in sys.path:
         sys.path.insert(0, p)
 # </editor-fold>
-        
+
 from inpainter.model import e2fgvi_hq
 from inpainter.util.tensor_util import resize_frames, resize_masks
 
 dir_ = os.path.dirname(__file__)
+
 
 class BaseInpainter:
     def __init__(self, E2FGVI_checkpoint, device) -> None:

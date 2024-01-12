@@ -66,10 +66,6 @@ class MagicRotoInPaint(GizmoBase):
 
     def on_execute(self):
         read_node = self.get_node(f"Read{1}", 'Read')
-<<<<<<< 11d5fb9cbe0cc563420693ae955ab217f70c0661
-=======
-
->>>>>>> Auto commit message
         super().on_execute()
         logger.debug(f"{read_node}, {self.args['output']}")
         self.check_multiple_files(read_node, self.args['output'])

@@ -1,13 +1,9 @@
 import argparse
-import sys
-<<<<<<< 11d5fb9cbe0cc563420693ae955ab217f70c0661
-import os
-=======
->>>>>>> Auto commit message
 import inspect
+import os
+import sys
 
 from PIL import Image
-
 
 # TODO: if it's installed with envVar you do not need that
 # <editor-fold desc="append module">
@@ -25,15 +21,10 @@ while safe_brake < 100:
 paths = [module_dir]
 for p in paths:
     if p not in sys.path:
-<<<<<<< 11d5fb9cbe0cc563420693ae955ab217f70c0661
         sys.path.append(p)
 
-from magicroto.utils import image_utils
-=======
-        sys.path.insert(0, p)
 # </editor-fold>
-        
->>>>>>> Auto commit message
+
 from magicroto.core.inpainter.base_inpainter import BaseInpainter
 from magicroto.utils.logger import logger
 

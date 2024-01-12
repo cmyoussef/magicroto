@@ -1,4 +1,5 @@
 import argparse
+import inspect
 import json
 import os
 import sys
@@ -26,7 +27,6 @@ from magicroto.core.base_segmenter import BaseSegmenter
 
 from magicroto.utils.logger import logger
 from magicroto.utils import image_utils
-from magicroto.core.tracker.util import painter
 
 
 class TrackingExecutor:
