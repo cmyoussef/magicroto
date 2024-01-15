@@ -5,6 +5,11 @@ try:
 except:
     print("Error importing OpenEXR")
 
+try:
+    import OpenImageIO as oiio
+except:
+    print("Error importing OpenImageIO")
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -290,12 +295,61 @@ def create_exr_image(individual_masks, path, base_image=None):
 
     # Write layers to the EXR file
     exr_data = {**rgb_layers, 'A': alpha_layer, **mask_layers}
-    path = path  if path.endswith('.exr') else path + ".exr"
+    path = path if path.endswith('.exr') else path + ".exr"
     exr_file = OpenEXR.OutputFile(path, header)
     exr_file.writePixels(exr_data)
     exr_file.close()
 
     return
+
+
+def create_exr_image_oiio(individual_masks, path, base_image=None):
+    """
+    Creates an EXR image using OpenImageIO with painted masks as RGB layers and each mask as a separate layer.
+
+    @param individual_masks: List of masks for each object.
+    @param path: Path to save the EXR file.
+    @param base_image: Base image for painting masks. If None, a blank image is used.
+    """
+    if base_image is None:
+        # Assuming all masks have the same dimensions
+        height, width = individual_masks[0].shape[:2]
+        base_image = np.zeros((height, width, 3), dtype=np.uint8)
+
+    # Paint the masks on the image
+    painted_image = base_image.copy()
+    for idx, mask in enumerate(individual_masks):
+        mask_color = idx + 1  # Assuming each index corresponds to a unique color
+        painted_image = mask_painter(painted_image, mask, mask_color, mask_alpha=0.7, contour_color=1, contour_width=3)
+
+    # Combine all masks for the alpha channel
+    combined_alpha_mask = np.any(individual_masks, axis=0).astype(np.float32)
+
+    # Prepare image specs
+    width, height = painted_image.shape[1], painted_image.shape[0]
+    spec = oiio.ImageSpec(width, height, 3 + 3 * len(individual_masks), oiio.HALF)
+
+    # Define RGB and alpha channels
+    spec.channelnames = ['R', 'G', 'B', 'A']
+    for idx in range(len(individual_masks)):
+        layer_name = f'Mask{idx}'
+        spec.channelnames += [f'{layer_name}.R', f'{layer_name}.G', f'{layer_name}.B']
+
+    # Initialize the image buffer
+    img = oiio.ImageBuf(spec)
+
+    # Set RGB and alpha channels
+    img.write(0, 0, 0, 3, painted_image)
+    img.write(0, 0, 0, 1, combined_alpha_mask, chbegin=3)
+
+    # Set mask channels
+    for idx, mask in enumerate(individual_masks):
+        mask_data = convert_to_exr_format(mask.astype(np.float32))
+        for ch in range(3):
+            img.write(0, 0, 0, 1, mask_data, chbegin=4 + idx * 3 + ch)
+
+    # Write to file
+    img.write(path)
 
 
 if __name__ == '__main__':
