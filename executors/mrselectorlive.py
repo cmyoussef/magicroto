@@ -49,7 +49,7 @@ class MagicRotoSelectorLive:
         logger.info(f"Creating server at {self.mask_port}")
         self.mask_server = SocketServer(port=self.mask_port, data_handler=self.on_points_changed)
         self.mask_server.start_accepting_clients()
-
+        print(f"Creating server at {self.mask_port}")
         self.easyRoto = MagicRotoSelectorExecutor(args)
         self.segmenter = self.easyRoto.create_segmenter()
         if args['image']:

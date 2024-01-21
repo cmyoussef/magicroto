@@ -1,10 +1,11 @@
 import json
+import os
+import platform
+import signal
 import subprocess
 import threading
 from typing import Callable, Dict, Union, Optional
-import os
-import signal
-import platform
+
 import psutil
 
 preexec = None
@@ -14,28 +15,47 @@ if platform.system() in ["Linux", "Darwin"]:
 use_call_back = False
 try:
     import nuke
+
     use_call_back = True
 except ModuleNotFoundError:
     pass
 
 
 class ExecuteThread(threading.Thread):
-    def __init__(self, args: Dict, callback: Optional[Callable], pre_cmd: str = None, post_cmd: str = None):
+    def __init__(self, args: Dict, callback: Optional[Callable], pre_cmd: str = None, post_cmd: str = None,
+                 open_new_terminal: Union[bool, str] = False):
         """
-        Initialize the thread with arguments, callback, and optional pre and post commands.
+        Initialize the thread with arguments, callback, optional pre and post commands, and a flag to open in a new terminal.
 
-        :param args: A dictionary containing script arguments.
-        :param callback: A callable function for the callback.
-        :param pre_cmd: A string containing pre-execution commands.
-        :param post_cmd: A string containing post-execution commands.
+        @param args: A dictionary containing script arguments.
+        @param callback: A callable function for the callback.
+        @param pre_cmd: Optional pre-execution command.
+        @param post_cmd: Optional post-execution command.
+        @param open_new_terminal: Flag to open script in a new terminal.
+        @return: None
         """
         threading.Thread.__init__(self)
         self.args = args
         self.callback = callback
         self.process = None
+        self.terminal = None
         self.pre_cmd = pre_cmd or 'echo Starting'
-        self.post_cmd = post_cmd or 'echo Excution finished'
+        self.post_cmd = post_cmd or 'echo Execution finished'
+        self.open_new_terminal = open_new_terminal
         self._cmd = None
+        self._pidfile = None
+
+    @property
+    def pidfile(self) -> str:
+        """
+        Generate and return the PID file path based on the user directory and terminal name.
+        """
+        if self._pidfile is None:
+            user_dir = os.path.expanduser('~')
+            filename = f"{self.open_new_terminal}_pidfile.txt" if isinstance(self.open_new_terminal,
+                                                                             str) else "pidfile.txt"
+            self._pidfile = os.path.join(user_dir, filename)
+        return self._pidfile
 
     @property
     def cmd(self) -> Union[str, list]:
@@ -63,7 +83,7 @@ class ExecuteThread(threading.Thread):
         # Process other arguments
         for key, value in args.items():
             # Serialize list or dict to JSON string
-            if isinstance(value, (list, )):
+            if isinstance(value, (list,)):
                 value = json.dumps(value)
             cmd.append(f'--{key}')
             # quote everything if we are going to pass as string not a list
@@ -82,22 +102,38 @@ class ExecuteThread(threading.Thread):
 
         return self._cmd
 
+    @property
+    def terminal_title(self):
+        port = self.args.get('ports', '')
+        title = f"server port {port}" if port else "test_uniq title"
+        if isinstance(self.open_new_terminal, str):
+            title += self.open_new_terminal
+        return title.replace(' ', '_')
+
     def run(self):
         """
-        Run the Python script using subprocess, with optional pre and post commands.
+        Run the Python script using subprocess, with optional pre and post commands, and in a new terminal if specified.
         """
-        # If pre- or post-commands exist, run them with shell=True
-        # self.process = subprocess.Popen(["/bin/bash"], stdin=subprocess.PIPE) #  , shell=True
-        if platform.system() == "Windows":
-            self.process = subprocess.Popen(["cmd.exe"], stdin=subprocess.PIPE)
+        if self.open_new_terminal:
+
+            if platform.system() == "Windows":
+                cmd_lines = self.cmd.replace('\n', '& ')
+                full_cmd = f'start /WAIT cmd.exe /k \"title {self.terminal_title} & {cmd_lines} & exit\"'
+            else:
+                cmd_lines = self.cmd.replace('\n', '; ')
+                full_cmd = f'gnome-terminal --title \"{self.terminal_title}\" -- bash -c \"{cmd_lines}; exec bash\"'
+            self.terminal = subprocess.Popen(full_cmd, shell=True)
         else:
-            self.process = subprocess.Popen(["/bin/bash"], stdin=subprocess.PIPE, preexec_fn=os.setsid)
+            # Original logic for running in the same terminal
+            if platform.system() == "Windows":
+                self.process = subprocess.Popen(["cmd.exe"], stdin=subprocess.PIPE)
+            else:
+                self.process = subprocess.Popen(["/bin/bash"], stdin=subprocess.PIPE, preexec_fn=os.setsid)
 
-        self.process.communicate(self.cmd.encode())  # Waits for the process to complete
+            self.process.communicate(self.cmd.encode())  # Waits for the process to complete
 
-        # Execute callback in main Nuke thread
-        if use_call_back and self.callback is not None:
-            nuke.executeInMainThread(self.callback, args=(self.args.get('output', None),))
+            if use_call_back and self.callback is not None:
+                nuke.executeInMainThread(self.callback, args=(self.args.get('output', None),))
 
     def terminate(self):
         """
@@ -111,3 +147,21 @@ class ExecuteThread(threading.Thread):
                 parent.terminate()
             else:
                 os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+
+        if self.terminal:
+            # Terminate the new terminal window and its subprocesses
+            if platform.system() == "Windows":
+                # Terminate CMD window
+                try:
+                    terminal_process = psutil.Process(self.terminal.pid)
+                    # Iterate over child processes and terminate them
+                    for child in terminal_process.children(recursive=True):
+                        child.terminate()
+                    # After terminating children, terminate the CMD process itself
+                    terminal_process.terminate()
+                except psutil.NoSuchProcess:
+                    pass  # Process might have already been terminated
+
+            else:
+                # For Unix-like systems, send SIGTERM to the process group
+                os.killpg(os.getpgid(self.terminal.pid), signal.SIGTERM)

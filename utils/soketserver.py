@@ -105,6 +105,7 @@ class SocketServer(metaclass=SingletonMeta):
 
     def start_accepting_clients(self, data_handler=None, return_response_data=False):
         logger.info(f"Server starting on port {self.port}")
+        print(f"Server starting on port {self.port}")
         thread = threading.Thread(target=self.accept_client, args=(data_handler, return_response_data,))
         thread.start()
         logger.debug(f"Starting to accept clients. on {thread}")

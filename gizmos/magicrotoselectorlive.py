@@ -2,7 +2,6 @@ import glob
 import os
 import threading
 import time
-from datetime import datetime
 
 import nuke
 from PIL import Image
@@ -221,6 +220,7 @@ class MagicRotoSelectorLive(GizmoBase):
         status_bar = self.status_bar
         self.set_status(running=False)
 
+
     def get_prompt_data(self):
 
         prompt_data = {}
@@ -245,7 +245,7 @@ class MagicRotoSelectorLive(GizmoBase):
         # Make sure the knob is set to be animated
         keys.setAnimated()
 
-        for i in range(start_frame, end_frame+1):
+        for i in range(start_frame, end_frame + 1):
             # nuke.frame(i)
             # nuke.execute(self.gizmo, i, i)
             # nuke.executeInMainThreadWithResult(nuke.frame, args=(i, ))
@@ -272,7 +272,7 @@ class MagicRotoSelectorLive(GizmoBase):
                 'frame': i,
                 'init_img_path': init_img_path_padding,
                 'prompts': prompts
-                }
+            }
 
             multi_frame_data[i] = frame_data
             keys.setValueAt(i, i)
@@ -300,7 +300,6 @@ class MagicRotoSelectorLive(GizmoBase):
         name = knob.name()
         if 'track_' in name and name.endswith('_enable'):
             track_knob = self.gizmo.knob(name[:-len('_enable')])
-            print(knob.value())
             track_knob.setEnabled(knob.value())
 
         if 'track_' in name and self.mask_client and not name.endswith('_enable'):
@@ -393,9 +392,6 @@ class MagicRotoSelectorLive(GizmoBase):
             except AttributeError:
                 logger.debug(f'AttributeError trying ensure_server_connection at port {self.main_port}')
                 self.ensure_server_connection()
-
-
-
 
     def update_args(self):
         super().update_args()

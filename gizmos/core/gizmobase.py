@@ -4,6 +4,7 @@ import os
 import socket
 import threading
 import time
+import traceback
 from datetime import datetime
 
 import nuke
@@ -163,8 +164,9 @@ class GizmoBase:
 
         pre_cmd = self.gizmo.knob('pre_cmd_knob').value() or None
         post_cmd = self.gizmo.knob('post_cmd_knob').value() or None
+        open_new_terminal = self.gizmo.knob('open_new_terminal').value() or None
 
-        thread = ExecuteThread(self.args, None, pre_cmd, post_cmd)
+        thread = ExecuteThread(self.args, None, pre_cmd, post_cmd, open_new_terminal=open_new_terminal)
         thread.start()
         self.thread_list.append(thread)
 
@@ -452,6 +454,13 @@ class GizmoBase:
             self.gizmo.addKnob(self.python_path_knob)
             self.python_path_knob.setValue(self._python_path)
 
+        open_new_terminal = self.gizmo.knob('open_new_terminal')
+        if not open_new_terminal:
+            open_new_terminal = nuke.Boolean_Knob('open_new_terminal', 'open new terminal')
+            open_new_terminal.setFlag(nuke.STARTLINE)
+            open_new_terminal.setValue(True)
+            self.gizmo.addKnob(open_new_terminal)
+
     def create_generate_tab(self):
         if not self.gizmo.knob('generate'):
             generate_tab_knob = nuke.Tab_Knob("generate", 'Generate')
@@ -667,7 +676,7 @@ class GizmoBase:
                 return node
 
         if nodeType is None:
-            print("Node type is none and the node doesn't exists")
+            print("Node type is None and the node doesn't exists")
             return
 
         self.gizmo.begin()
@@ -689,11 +698,8 @@ class GizmoBase:
             node = self.get_node(node)
 
         node = node or self.input_node
-
-        for i in range(self.gizmo.maximumInputs()):
-            if self.gizmo.input(i) == node:
-                # Check if this input of the group node has a source connected
-                return self.gizmo.input(i) is not None
+        inp_index = int(str(node).split(' ')[-1])
+        return True if self.gizmo.input(inp_index) else False
 
     def add_padding(self, path, ext=None):
         base_path, current_ext = os.path.splitext(path)
@@ -843,11 +849,13 @@ class GizmoBase:
         p = False
         self.close_server()
         for t in self.thread_list:
-            try:
-                t.terminate()
-                p = True
-            except:
-                pass
+            if hasattr(t, 'terminate'):
+                try:
+                    t.terminate()
+                    p = True
+                except Exception as e:
+                    tb = traceback.format_exc()
+                    logger.debug(f"An error occurred in terminate: {e}\n{tb}")
         self.thread_list = []
         if p:
             logger.warning(f'Terminating running processes')
