@@ -4,6 +4,7 @@ import threading
 import time
 
 import nuke
+import select
 from PIL import Image
 
 from magicroto.config.config_utils import mg_selector_live_path
@@ -220,7 +221,6 @@ class MagicRotoSelectorLive(GizmoBase):
         status_bar = self.status_bar
         self.set_status(running=False)
 
-
     def get_prompt_data(self):
 
         prompt_data = {}
@@ -361,8 +361,8 @@ class MagicRotoSelectorLive(GizmoBase):
         multiData = {nuke.frame(): data_to_send}
         self.attempt_to_send(multiData)
 
-        file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
-        self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
+        # file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
+        # self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
 
     def _attempt_to_send(self, data_to_send):
         if self.knob_change_timer is not None:
@@ -372,8 +372,27 @@ class MagicRotoSelectorLive(GizmoBase):
         self.knob_change_timer = threading.Timer(0.5, self._attempt_to_send, args=(data_to_send,))
         self.knob_change_timer.start()
 
+    def send_data_and_wait_for_response(self, data, timeout=5):
+        """
+        Sends data to the server and waits for a response.
+
+        @param data: The data to send to the server.
+        @return: The response received from the server.
+        """
+        # Sending data to server
+        self.mask_client.sendall(SocketServer.encode_data(data))
+        # Waiting for server's response
+        ready = select.select([self.mask_client], [], [], timeout)
+        if ready[0]:
+            response = self.mask_client.recv(4096)  # Adjust buffer size as needed
+            image_list = SocketServer.decode_data(response)
+            nuke.executeInMainThread(self.reload_read_nodes)
+            # self.reload_read_nodes()
+            return image_list
+
     def attempt_to_send(self, data_to_send):
         try_count = 0
+
         while True and try_count < 11:
             try_count += 1
 
@@ -381,9 +400,12 @@ class MagicRotoSelectorLive(GizmoBase):
                 logger.warning(f"Failed to send to the server at {self.main_port}")
 
             try:
-                self.mask_client.sendall(SocketServer.encode_data(data_to_send.copy()))
+                # self.mask_client.sendall(SocketServer.encode_data())
+                rec_data = self.send_data_and_wait_for_response(data_to_send.copy())
                 logger.debug(f'data_to_send: {data_to_send}')
-                break
+                logger.debug(f'received : {rec_data}')
+                return rec_data
+                # break
 
             except ConnectionResetError:
                 logger.debug(f'ConnectionResetError trying ensure_server_connection at port {self.main_port}')

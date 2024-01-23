@@ -505,6 +505,7 @@ class GizmoBase:
             if n.Class() == 'Read':
                 # Reload the Read node
                 n['reload'].execute()
+                logger.warning(n.name())
         self.force_evaluate_nodes()
 
     def create_generate_knobs(self):
@@ -892,7 +893,7 @@ class GizmoBase:
         node.knob('on_error').setValue('black')
         self.force_evaluate_nodes()
 
-    def check_files(self, files, timeout):
+    def check_files(self, files, timeout, sleep=.1):
         time.sleep(5)
         start_time = time.time()
         # Convert list to set for efficient removal.
@@ -901,7 +902,7 @@ class GizmoBase:
             for file_path, node in list(remaining_files):  # Create a copy of the set for iteration.
                 file_path_to_check = file_path.replace(f'.{self.frame_padding}.', f'.{self.frame_range[0]:04d}.')
                 if common_utils.check_file_complete(file_path_to_check):
-                    time.sleep(1)
+                    # time.sleep(sleep)
                     nuke.executeInMainThread(self.update_single_read_node, args=(node, file_path,))
                     logger.debug(f'updating {file_path}')
                     remaining_files.remove((file_path, node))  # Remove from the set.

@@ -48,7 +48,7 @@ class MagicRotoSelectorLive:
 
         logger.info(f"Creating server at {self.mask_port}")
         self.mask_server = SocketServer(port=self.mask_port, data_handler=self.on_points_changed)
-        self.mask_server.start_accepting_clients()
+        self.mask_server.start_accepting_clients(return_response_data=True)
         print(f"Creating server at {self.mask_port}")
         self.easyRoto = MagicRotoSelectorExecutor(args)
         self.segmenter = self.easyRoto.create_segmenter()
@@ -74,8 +74,10 @@ class MagicRotoSelectorLive:
         return args
 
     def on_points_changed(self, data):
+        image_list = []
         for frame, d in data.items():
-            self._on_points_changed(d, frame)
+            image_list.append(self._on_points_changed(d, frame))
+        return image_list
 
     def _on_points_changed(self, data, frame=None):
         frame = frame or f'{data.get("frame", 1001):04d}'
@@ -104,7 +106,7 @@ class MagicRotoSelectorLive:
         out_img = self.args['output_path'].replace('.%04d.', f'.{frame:04d}.')
         img.save(out_img)
         logger.info(f'Images saved {out_img}')
-        return masks
+        return out_img
 
 
 if __name__ == '__main__':

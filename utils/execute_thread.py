@@ -121,7 +121,7 @@ class ExecuteThread(threading.Thread):
                 full_cmd = f'start /WAIT cmd.exe /k \"title {self.terminal_title} & {cmd_lines} & exit\"'
             else:
                 cmd_lines = self.cmd.replace('\n', '; ')
-                full_cmd = f'gnome-terminal --title \"{self.terminal_title}\" -- bash -c \"{cmd_lines}; exec bash\"'
+                full_cmd = f'mate-terminal --title \"{self.terminal_title}\" -e \"bash -c \\\"{cmd_lines}; exec bash\\\"\"'
             self.terminal = subprocess.Popen(full_cmd, shell=True)
         else:
             # Original logic for running in the same terminal
