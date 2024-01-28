@@ -138,8 +138,9 @@ class GizmoBase:
             self.mask_client.setblocking(False)
             self.is_client_connected = True
             logger.info(f"Successfully connected to server at port {self.main_port}")
-            nuke.executeInMainThread(self.set_status,
-                                     args=(True, f"Successfully connected to server at port {self.main_port}",))
+            self.set_status(True, f"Successfully connected to server at port {self.main_port}",)
+            # nuke.executeInMainThread(self.set_status,
+            #                          args=(True, f"Successfully connected to server at port {self.main_port}",))
             # self.set_status(True, f"Successfully connected to server at port {self.main_port}")
             return True
 
@@ -590,7 +591,8 @@ class GizmoBase:
             if execute_btn:
                 self.gizmo.knob('execute_btn').clearFlag(nuke.DISABLED)
             msg = f'Idle {msg}'
-        self.status_bar.setValue(msg)
+        nuke.executeInMainThread(self.status_bar.setValue, args=(msg,))
+        # self.status_bar.setValue(msg)
 
     @property
     def output_dir(self):
@@ -951,9 +953,12 @@ class GizmoBase:
         logger.debug(f'attempt to close server at port {self.main_port}, from {self.mask_client}')
         if self.mask_client:
             header = b'command::'
-            self.mask_client.sendall(header + b'quit')
-            self.mask_client.close()
-            self.mask_client = None
+            try:
+                self.mask_client.sendall(header + b'quit')
+                self.mask_client.close()
+                self.mask_client = None
+            except ConnectionResetError:
+                pass
             logger.info("Closing Command sent.")
 
     def on_destroy(self):

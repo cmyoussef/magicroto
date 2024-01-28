@@ -7,28 +7,18 @@ import traceback
 from magicroto.utils.logger import logger
 
 
-class SingletonMeta(type):
-    _instances = {}
+class ServerClientBase:
 
-    def __call__(cls, *args, **kwargs):
-        port = kwargs.get('port', None)
-        if port is not None:
-            if port not in cls._instances:
-                instance = super().__call__(*args, **kwargs)
-                cls._instances[port] = instance
-            return cls._instances[port]
-        else:
-            return super().__call__(*args, **kwargs)
+    def __init__(self):
+        # Stores client threads and connections
+        self.client_threads = {}
+        self.client_connections = {}
 
+    def close_connection(self, addr):
+        return NotImplementedError
 
-class SocketServer(metaclass=SingletonMeta):
-    @classmethod
-    def get_instances(cls):
-        """
-        Returns a copy of the dictionary containing all initialized instances
-        of the SocketServer class.
-        """
-        return cls._instances.copy()
+    def close_server(self):
+        return NotImplementedError
 
     @classmethod
     def encode_data(cls, data):
@@ -75,64 +65,13 @@ class SocketServer(metaclass=SingletonMeta):
         # Return None or raise an error if the complete data is not received
         return None
 
-    def __init__(self, port=None, data_handler=None, host="localhost"):
-
-        self.data_handler = data_handler
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-        # Stores client threads and connections
-        self.client_threads = {}
-        self.client_connections = {}
-
-        if port:
-            self.port = port
-        else:
-            self.port = self.find_available_port()
-
-        self.server_socket.bind((host, self.port))
-        self.server_socket.listen(1)
-        handler_logger = f', DataHandler:{data_handler.__name__}' if data_handler else ''
-        logger.info(f"Server created on port {self.port}, Host:{host}{handler_logger}")
-
-    @staticmethod
-    def find_available_port():
-        temp_sock = socket.socket()
-        temp_sock.bind(('', 0))
-        port = temp_sock.getsockname()[1]
-        temp_sock.close()
-        return port
-
-    def start_accepting_clients(self, data_handler=None, return_response_data=False):
-        logger.info(f"Server starting on port {self.port}")
-        print(f"Server starting on port {self.port}")
-        thread = threading.Thread(target=self.accept_client, args=(data_handler, return_response_data,))
-        thread.start()
-        logger.debug(f"Starting to accept clients. on {thread}")
-
-    def accept_client(self, data_handler=None, return_response_data=False):
-        logger.debug("Inside accept_client.")
-        while True:
-            conn, addr = self.server_socket.accept()
-            logger.debug(f"Accepted connection from {addr}.")
-
-            # Store the client connection
-            self.client_connections[addr] = conn
-
-            # Start a new thread for each client
-            thread = threading.Thread(target=self.receive_data, args=(conn, addr, data_handler, return_response_data,))
-            thread.start()
-
-            # Store the thread
-            self.client_threads[addr] = thread
-
     def receive_data(self, conn, addr, data_handler=None, return_response_data=False):
         logger.debug(f"Inside receive_data for {addr}.")
 
         data_buffer = b""
         payload_data = b""
         payload_size = None
-        handler = data_handler if data_handler else self.data_handler  # Use passed data_handler if available
+        handler = data_handler
 
         while True:
             try:
@@ -146,7 +85,7 @@ class SocketServer(metaclass=SingletonMeta):
                     if header == b'command':
                         if data_buffer == b'quit':
                             conn.sendall(b'ack')
-                            self.close_connection(addr)
+                            self.close_server()
                             return
 
                     elif header == b'data':
@@ -190,13 +129,100 @@ class SocketServer(metaclass=SingletonMeta):
 
             except ConnectionResetError:
                 logger.error("Connection was closed by the client.")
+                self.close_connection(addr)
                 break
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 break
 
         # Clean up and close the connection
-        self.close_connection(addr)
+
+
+class SingletonMeta(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        port = kwargs.get('port', None)
+        if port is not None:
+            if port not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[port] = instance
+            return cls._instances[port]
+        else:
+            return super().__call__(*args, **kwargs)
+
+
+class SocketServer(ServerClientBase, metaclass=SingletonMeta):
+    @classmethod
+    def get_instances(cls):
+        """
+        Returns a copy of the dictionary containing all initialized instances
+        of the SocketServer class.
+        """
+        return cls._instances.copy()
+
+    def __init__(self, port=None, data_handler=None, host="localhost"):
+        super().__init__()
+        self.data_handler = data_handler
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        if port:
+            self.port = port
+        else:
+            self.port = self.find_available_port()
+
+        self.server_socket.bind((host, self.port))
+        self.server_socket.listen(1)
+        handler_logger = f', DataHandler:{data_handler.__name__}' if data_handler else ''
+        logger.info(f"Server created on port {self.port}, Host:{host}{handler_logger}")
+
+    @staticmethod
+    def find_available_port():
+        temp_sock = socket.socket()
+        temp_sock.bind(('', 0))
+        port = temp_sock.getsockname()[1]
+        temp_sock.close()
+        return port
+
+    def start_accepting_clients(self, data_handler=None, return_response_data=False):
+        logger.info(f"Server starting on port {self.port}")
+        print(f"Server starting on port {self.port}")
+        data_handler = data_handler or self.data_handler
+
+        thread = threading.Thread(target=self.accept_client, args=(data_handler, return_response_data,))
+        thread.start()
+        logger.debug(f"Starting to accept clients. on {thread}")
+
+    def accept_client(self, data_handler=None, return_response_data=False):
+        logger.debug("Inside accept_client.")
+        while True:
+            conn, addr = self.server_socket.accept()
+            logger.debug(f"Accepted connection from {addr}.")
+
+            # Store the client connection
+            self.client_connections[addr] = conn
+
+            # Start a new thread for each client
+            thread = threading.Thread(target=self.receive_data, args=(conn, addr, data_handler, return_response_data,))
+            thread.start()
+
+            # Store the thread
+            self.client_threads[addr] = thread
+
+    def send_to_all_clients(self, data):
+        """
+        Sends data to all connected clients.
+
+        @param data: The data to be sent to the clients.
+        """
+        encoded_data = self.encode_data(data)
+        for addr, conn in self.client_connections.items():
+            try:
+                conn.sendall(encoded_data)
+                logger.info(f"Data sent to client at {addr}")
+            except Exception as e:
+                logger.error(f"Failed to send data to client at {addr}: {e}")
 
     def close_connection(self, addr):
         logger.debug(f"Closing connection with {addr}")
@@ -206,9 +232,34 @@ class SocketServer(metaclass=SingletonMeta):
             del self.client_threads[addr]
             logger.info(f"Server is closed {addr}")
 
-# Sample data handler function
-def print_received_data(data):
-    logger.info(f"Received mask: {data}")
+    def close_server(self):
+        """
+        Closes all client connections and then shuts down the server.
+        """
+        # Close all client connections
+        for addr, conn in self.client_connections.items():
+            try:
+                conn.close()
+                logger.info(f"Closed connection with client at {addr}")
+            except Exception as e:
+                logger.error(f"Error closing connection with client at {addr}: {e}")
+
+        # Clear the connections and threads dictionaries
+        self.client_connections.clear()
+        self.client_threads.clear()
+
+        # Shut down and close the server socket if it's open
+        if self.server_socket.fileno() != -1:
+            try:
+                self.server_socket.shutdown(socket.SHUT_RDWR)
+            except Exception as e:
+                logger.error(f"Error shutting down server socket: {e}")
+
+            try:
+                self.server_socket.close()
+                logger.info("Server socket closed successfully.")
+            except Exception as e:
+                logger.error(f"Error closing server socket: {e}")
 
 # if __name__ == '__main__':
 #     # Initialize SocketServer

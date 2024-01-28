@@ -359,10 +359,13 @@ class MagicRotoSelectorLive(GizmoBase):
             'prompts': prompts
         }
         multiData = {nuke.frame(): data_to_send}
-        self.attempt_to_send(multiData)
 
-        # file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
-        # self.check_multiple_files([self.get_node(f"Read1", 'Read')], [file_paths])
+        file_paths = self.output_file_path.replace(f'.{self.frame_padding}.', f'.{nuke.frame():04d}.')
+        node = self.get_node(f"Read1", 'Read')
+        self.update_single_read_node(node, file_paths, guess_wildcard=False)
+
+        self.attempt_to_send(multiData)
+        # self.check_multiple_files([node], [file_paths])
 
     def _attempt_to_send(self, data_to_send):
         if self.knob_change_timer is not None:
@@ -424,17 +427,20 @@ class MagicRotoSelectorLive(GizmoBase):
         self.args['script_path'] = mg_selector_live_path
         self.args['SAM_checkpoint'] = os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth')
 
-    def update_single_read_node(self, node, file_path):
+    def update_single_read_node(self, node, file_path, guess_wildcard=True):
         file_path = file_path.replace('"', '').replace('\\', '/')
         file_main_path, fn, ext = file_path.rsplit('.', 2)
         all_files = glob.glob(f'{file_main_path}.*.{ext}')
         frames = [int(f.rsplit('.', 2)[-2]) for f in all_files]
-
-        wildcard_path = f'{file_main_path}.####.{ext}'
+        if frames:
+            first, last = min(frames), max(frames)
+        else:
+            first = last = nuke.frame()
+        wildcard_path = f'{file_main_path}.####.{ext}' if guess_wildcard else file_path
         node.knob('file').setValue(wildcard_path)
         node.knob('reload').execute()
-        node.knob('first').setValue(min(frames))
-        node.knob('last').setValue(max(frames))
+        node.knob('first').setValue(first)
+        node.knob('last').setValue(last)
 
         # Set the 'on_error' parameter to 'nearest frame'
         node.knob('on_error').setValue('nearest')
