@@ -54,6 +54,7 @@ class MagicRotoInPaint(GizmoBase):
         start_frame, end_frame = self.frame_range
         self.args['start_frame'] = start_frame
         self.args['end_frame'] = end_frame
+        self.args['chunk_size'] = int(self.gizmo.knob('chunk_size_knob').value())
 
         image_path = self.add_padding(self.get_init_img_path())
         self.writeInput(image_path, self.input_node, frame_range=(start_frame, end_frame))
@@ -86,6 +87,11 @@ class MagicRotoInPaint(GizmoBase):
         self.create_frame_range_knobs()
 
         self.add_divider()
+
+        if not self.gizmo.knob('chunk_size_knob'):
+            chunk_size_knob = nuke.Int_Knob('chunk_size_knob', 'Chunk Size')
+            chunk_size_knob.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(chunk_size_knob)
 
         self.create_execute_buttons()
 

@@ -3,6 +3,7 @@ import inspect
 import os
 import sys
 
+import torch
 from PIL import Image
 
 # TODO: if it's installed with envVar you do not need that
@@ -62,9 +63,10 @@ class InPaintExecutor:
         parser.add_argument('--start_frame', type=int, default=1001, help='First frame to paint')
         parser.add_argument('--logger_level', type=int, default=1001, help='First frame to paint')
         parser.add_argument('--end_frame', type=int, default=1001, help='Last frame to paint')
+        parser.add_argument('--chunk_size', type=int, default=0, help='To split the inpaint into chunks')
         return parser
 
-    def execute_inpainting(self, frames, masks, output, ratio=1, start_frame=0):
+    def execute_inpainting(self, frames, masks, output, ratio=1, start_frame=0, chunk_size=0):
         """
         Execute inpainting on provided frames and masks.
 
@@ -73,16 +75,28 @@ class InPaintExecutor:
         @param output: Directory to save inPainted images.
         @param ratio: Down-sampling ratio.
         @param start_frame: to name the files correctly.
+        @param chunk_size: to split the inpaint into chunks.
         @return: None
         """
         if len(frames) != len(masks):
             raise ValueError("The number of frames and masks must be the same.")
 
-        inPainted_frames = self.base_inPaint.inpaint(frames, masks, ratio=ratio)
+        def process_chunk(frame_chunk, mask_chunk, start_idx):
+            inPainted_frames_chunk = self.base_inPaint.inpaint(frame_chunk, mask_chunk, ratio=ratio)
+            for ti, inPainted_frame in enumerate(inPainted_frames_chunk):
+                frame = Image.fromarray(inPainted_frame).convert('RGB')
+                frame.save(output.replace('.%04d.', f'.{ti + start_idx:04d}.'))
+            torch.cuda.empty_cache()
 
-        for ti, inPainted_frame in enumerate(inPainted_frames):
-            frame = Image.fromarray(inPainted_frame).convert('RGB')
-            frame.save(output.replace('.%04d.', f'.{ti+start_frame:04d}.'))
+        num_frames = len(frames)
+        if chunk_size <= 0 or chunk_size >= num_frames:
+            process_chunk(frames, masks, start_frame)
+        else:
+            for i in range(0, num_frames, chunk_size):
+                end_idx = min(i + chunk_size, num_frames)
+                frame_chunk = frames[i:end_idx]
+                mask_chunk = masks[i:end_idx]
+                process_chunk(frame_chunk, mask_chunk, start_frame + i)
 
 
 if __name__ == '__main__':
@@ -93,4 +107,5 @@ if __name__ == '__main__':
     np_frames = image_utils.load_images(args.image_path, mode='RGB', frame_range=frame_range)
     np_masks = image_utils.load_images(args.mask_path, mode='P', frame_range=frame_range)
 
-    executor.execute_inpainting(np_frames, np_masks, args.output, args.ratio, start_frame=args.start_frame)
+    executor.execute_inpainting(np_frames, np_masks, args.output, args.ratio,
+                                start_frame=args.start_frame, chunk_size=args.chunk_size)

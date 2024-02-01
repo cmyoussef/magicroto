@@ -42,6 +42,8 @@ class ExecuteThread(threading.Thread):
         self.pre_cmd = pre_cmd or 'echo Starting'
         self.post_cmd = post_cmd or 'echo Execution finished'
         self.open_new_terminal = open_new_terminal
+        if platform.system() != "Windows":
+            self.open_new_terminal = False
         self._cmd = None
         self._pidfile = None
 
