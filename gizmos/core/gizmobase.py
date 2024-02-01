@@ -954,8 +954,14 @@ class GizmoBase:
         if self.mask_client:
             header = b'command::'
             try:
-                self.mask_client.sendall(header + b'quit')
-                self.mask_client.close()
+                if self.mask_client.fileno() != -1:
+                    try:
+                        self.mask_client.sendall(header + b'quit')
+                        self.mask_client.sendall(header + b'quit')
+                        self.mask_client.close()
+                    except OSError as e:
+                        # Handle error or log it
+                        print(f"Error sending data: {e}")
                 self.mask_client = None
             except ConnectionResetError:
                 pass
