@@ -79,12 +79,12 @@ class GizmoBase:
             self.gizmo_class_type = nuke.String_Knob("gizmo_class_type", "Gizmo class type")
             self.gizmo_class_type.setValue(self.__class__.__name__)
             self.gizmo.addKnob(self.gizmo_class_type)
-            # self.gizmo_class_type.setVisible(False)
+            self.gizmo_class_type.setVisible(False)
 
         if not self.gizmo.knob("gizmo_data_knob"):
             self.gizmo_data = nuke.Multiline_Eval_String_Knob("gizmo_data_knob", "Gizmo Data")
             self.gizmo.addKnob(self.gizmo_data)
-            # self.gizmo_data.setVisible(False)
+            self.gizmo_data.setVisible(False)
 
         if not self.gizmo.knob("default_knobs_knob"):
             self.default_knobs_knob = nuke.String_Knob("default_knobs_knob", "default knobs ")
@@ -105,6 +105,7 @@ class GizmoBase:
         self.user_tabs = []
         nuke.addOnDestroy(self.on_destroy)
 
+    # region client
     def ensure_server_connection(self):
         # self.write_input()
         if self.is_server_running():
@@ -138,7 +139,7 @@ class GizmoBase:
             self.mask_client.setblocking(False)
             self.is_client_connected = True
             logger.info(f"Successfully connected to server at port {self.main_port}")
-            self.set_status(True, f"Successfully connected to server at port {self.main_port}",)
+            self.set_status(True, f"Successfully connected to server at port {self.main_port}", )
             # nuke.executeInMainThread(self.set_status,
             #                          args=(True, f"Successfully connected to server at port {self.main_port}",))
             # self.set_status(True, f"Successfully connected to server at port {self.main_port}")
@@ -190,6 +191,52 @@ class GizmoBase:
                 self.main_port = SocketServer.find_available_port()
         if retry_count == 5:
             logger.error("Failed to connect to the server after multiple attempts.")
+
+    @property
+    def main_port(self):
+        port_knob = self.gizmo.knob('port_knob')
+        if port_knob:
+            return int(port_knob.value())
+        else:
+            return SocketServer.find_available_port()
+
+    @main_port.setter
+    def main_port(self, port):
+        port_knob = self.gizmo.knob('port_knob')
+        if port_knob:
+            set_port_value = lambda: port_knob.setValue(int(port))
+            nuke.executeInMainThread(set_port_value)
+
+    def find_available_port_knob(self):
+        port_knob = self.gizmo.knob('port_knob')
+        if port_knob:
+            self.main_port = SocketServer.find_available_port()
+            # port_knob.setValue()
+
+    @property
+    def ports(self):
+        return [self.main_port]
+
+    def close_server(self):
+
+        logger.debug(f'attempt to close server at port {self.main_port}, from {self.mask_client}')
+        if self.mask_client:
+            header = b'command::'
+            try:
+                if self.mask_client.fileno() != -1:
+                    try:
+                        self.mask_client.sendall(header + b'quit')
+                        self.mask_client.sendall(header + b'quit')
+                        self.mask_client.close()
+                    except OSError as e:
+                        # Handle error or log it
+                        print(f"Error sending data: {e}")
+                self.mask_client = None
+            except ConnectionResetError:
+                pass
+            logger.info("Closing Command sent.")
+
+    # endregion
 
     @property
     def data(self):
@@ -469,27 +516,6 @@ class GizmoBase:
         self.user_tabs.append('Generate')
         return self.gizmo.knob('generate')
 
-    @property
-    def main_port(self):
-        port_knob = self.gizmo.knob('port_knob')
-        if port_knob:
-            return int(port_knob.value())
-        else:
-            return SocketServer.find_available_port()
-
-    @main_port.setter
-    def main_port(self, port):
-        port_knob = self.gizmo.knob('port_knob')
-        if port_knob:
-            set_port_value = lambda: port_knob.setValue(int(port))
-            nuke.executeInMainThread(set_port_value)
-
-    def find_available_port_knob(self):
-        port_knob = self.gizmo.knob('port_knob')
-        if port_knob:
-            self.main_port = SocketServer.find_available_port()
-            # port_knob.setValue()
-
     def reload_button(self):
         reload_btn = self.gizmo.knob('reload_btn_knob')
         if not reload_btn:
@@ -650,10 +676,6 @@ class GizmoBase:
     @property
     def output_node(self):
         return self.get_node("Output1", 'Output')
-
-    @property
-    def ports(self):
-        return [self.main_port]
 
     def update_args(self):
         self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
@@ -947,25 +969,6 @@ class GizmoBase:
             knobC = self.gizmo.knob(knob)
             if knobC:
                 knobC.setVisible(show)
-
-    def close_server(self):
-
-        logger.debug(f'attempt to close server at port {self.main_port}, from {self.mask_client}')
-        if self.mask_client:
-            header = b'command::'
-            try:
-                if self.mask_client.fileno() != -1:
-                    try:
-                        self.mask_client.sendall(header + b'quit')
-                        self.mask_client.sendall(header + b'quit')
-                        self.mask_client.close()
-                    except OSError as e:
-                        # Handle error or log it
-                        print(f"Error sending data: {e}")
-                self.mask_client = None
-            except ConnectionResetError:
-                pass
-            logger.info("Closing Command sent.")
 
     def on_destroy(self):
         if nuke.thisNode() == self.gizmo:
