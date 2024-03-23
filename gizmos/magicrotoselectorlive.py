@@ -367,14 +367,6 @@ class MagicRotoSelectorLive(GizmoBase):
         self.attempt_to_send(multiData)
         # self.check_multiple_files([node], [file_paths])
 
-    def _attempt_to_send(self, data_to_send):
-        if self.knob_change_timer is not None:
-            self.knob_change_timer.cancel()
-
-        # Create a new timer
-        self.knob_change_timer = threading.Timer(0.5, self._attempt_to_send, args=(data_to_send,))
-        self.knob_change_timer.start()
-
     def send_data_and_wait_for_response(self, data, timeout=5):
         """
         Sends data to the server and waits for a response.
