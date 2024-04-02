@@ -654,6 +654,16 @@ class GizmoBase:
     def knobChanged(self, knob=None):
 
         knob = knob or nuke.thisKnob()
+
+        if knob.name() == 'use_frame_range_knobs':
+            isEnabled = knob.value()
+            if isEnabled:
+                self.gizmo.knob('last_frame_knob').clearFlag(nuke.DISABLED)
+                self.gizmo.knob('first_frame_knob').clearFlag(nuke.DISABLED)
+            else:
+                self.gizmo.knob('last_frame_knob').setFlag(nuke.DISABLED)
+                self.gizmo.knob('first_frame_knob').setFlag(nuke.DISABLED)
+
         if knob.name() == 'controlNet_menu':
             pass
 

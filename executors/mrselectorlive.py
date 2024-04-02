@@ -1,6 +1,5 @@
 import inspect
 import os
-import time
 import sys
 
 # TODO: if it's installed with envVar you do not need that

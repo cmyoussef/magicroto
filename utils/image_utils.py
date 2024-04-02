@@ -6,10 +6,7 @@ import re
 from collections import OrderedDict
 
 import cv2
-
-
 import numpy as np
-
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageEnhance
@@ -118,7 +115,7 @@ def colormap(rgb=True):
 color_list = colormap().astype('uint8').tolist()
 
 
-def load_images(path, mode='RGB', frame_range=None, silent=False, frames=None, return_dict=False):
+def load_images(path, mode='RGB', frame_range=None, silent=False, frames=None, return_dict=False, ouput_type='np'):
     """
     Load images from a wildcard path and convert them to a numpy array.
 
@@ -129,6 +126,7 @@ def load_images(path, mode='RGB', frame_range=None, silent=False, frames=None, r
     """
     images = []
     frame_numbers = []
+    image_paths = []
     if frame_range is not None or frames is not None:
 
         frames = frames or range(frame_range[0], frame_range[1] + 1)
@@ -137,14 +135,16 @@ def load_images(path, mode='RGB', frame_range=None, silent=False, frames=None, r
             if not os.path.exists(image_path) and not silent:
                 logger.warning(f"Dose not exists\n\t{image_path}")
                 continue
-            images.append(Image.open(image_path).convert(mode))
+            image_paths.append(image_path)
+            if ouput_type != 'path':
+                images.append(Image.open(image_path).convert(mode))
             frame_numbers.append(f)
 
     else:
         image_paths = glob.glob(path.replace('%04d', '*'))
         image_paths.sort()
-
-        images = [Image.open(image_path).convert(mode) for image_path in image_paths]
+        if ouput_type != 'path':
+            images = [Image.open(image_path).convert(mode) for image_path in image_paths]
 
         pattern = r"\.(\d{4})\."
         for path in image_paths:
@@ -155,11 +155,14 @@ def load_images(path, mode='RGB', frame_range=None, silent=False, frames=None, r
 
     # logger.debug(images)
     if images:
-        np_images = np.stack(images, 0)
+        if ouput_type == 'np':
+            images = np.stack(images, 0)
+        elif ouput_type == 'path':
+            images = image_paths
         if return_dict:
-            return OrderedDict(zip(frame_numbers, np_images))
+            return OrderedDict(zip(frame_numbers, images))
         else:
-            return np_images
+            return images
 
 
 def numpy_to_pil(numpy_array):
