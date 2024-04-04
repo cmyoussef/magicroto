@@ -17,7 +17,6 @@ class RVMExecutor(BaseExecutor):
         self.parser.add_argument('--checkpoint', type=str, required=True)
         self.parser.add_argument('--device', type=str, default='cuda')
         self.parser.add_argument('--input_path', type=str, required=True)
-        self.parser.add_argument('--output', type=str, required=True)
         self.parser.add_argument('--downsample-ratio', type=float, default=1)
         self.parser.add_argument('--output-type', type=str, choices=['png'], default='png')
         self.parser.add_argument('--seq-chunk', type=int, default=1)
