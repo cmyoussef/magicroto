@@ -1,7 +1,6 @@
 import nuke
 from nukebridge.gizmos.core.base import Base
 
-from magicroto.config.config_utils import rvmexecutor_path
 from magicroto.config.config_loader import ConfigLoader
 
 
@@ -9,9 +8,10 @@ class RVM(Base):
 
     def __init__(self, gizmo=None, name=None):
         self.config_loader = ConfigLoader()
+        self._MODULE_NAME = 'magicroto'
         super().__init__(gizmo=gizmo, name=name)
         self.copy_alpha_nods()
-        self._MODULE_NAME = 'magicroto'
+
 
     def create_generate_knobs(self):
         self.create_generate_tab()

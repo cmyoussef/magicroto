@@ -19,8 +19,9 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.transforms.functional import to_pil_image
 from tqdm.auto import tqdm
-from magicroto.core.rvm_pkg.model import MattingNetwork
+
 from magicroto.core.rvm_pkg.inference_utils import ImageSequenceReader
+from magicroto.core.rvm_pkg.model import MattingNetwork
 
 
 def convert_video(model,
@@ -52,10 +53,9 @@ def convert_video(model,
     assert seq_chunk >= 1, 'Sequence chunk must be >= 1'
     assert num_workers >= 0, 'Number of workers must be >= 0'
 
-
     # Initialize transform
     transform = transforms.ToTensor()
-    frame_range = frame_range[0], frame_range[1]+1
+    frame_range = frame_range[0], frame_range[1] + 1
     # Initialize reader
     source = ImageSequenceReader(input_path, frame_range, transform)
     reader = DataLoader(source, batch_size=seq_chunk, pin_memory=True, num_workers=num_workers)
@@ -98,7 +98,6 @@ class Converter:
 
 if __name__ == '__main__':
     import argparse
-
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--variant', type=str, required=True, choices=['mobilenetv3', 'resnet50'])

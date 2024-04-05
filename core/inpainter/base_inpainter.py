@@ -14,7 +14,6 @@ from tqdm import tqdm
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 base_name = os.path.basename(current_dir)
 module_dir = os.path.dirname(current_dir)
-print(f'module_dir:{module_dir}\ncurrent_dir:{current_dir}')
 paths = [module_dir]
 for p in paths:
     if p not in sys.path:
