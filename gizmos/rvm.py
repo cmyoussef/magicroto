@@ -2,14 +2,16 @@ import nuke
 from nukebridge.gizmos.core.base import Base
 
 from magicroto.config.config_utils import rvmexecutor_path
+from magicroto.config.config_loader import ConfigLoader
 
 
 class RVM(Base):
 
     def __init__(self, gizmo=None, name=None):
-        self._MODULE_NAME = 'magicroto'
+        self.config_loader = ConfigLoader()
         super().__init__(gizmo=gizmo, name=name)
         self.copy_alpha_nods()
+        self._MODULE_NAME = 'magicroto'
 
     def create_generate_knobs(self):
         self.create_generate_tab()
@@ -36,7 +38,7 @@ class RVM(Base):
         super().update_args()
         variant = self.gizmo.knob('variant_menu').value()
         self.args['variant'] = variant
-        self.args['script_path'] = rvmexecutor_path
+        # self.args['script_path'] = rvmexecutor_path
         self.args['checkpoint'] = f'{self.cache_dir}/rvm_{variant}.pth'
         input_01 = self.write_input(self.get_input_img_path(self.input_node), self.input_node, hard_error=True)
         self.args['input_path'] = input_01
