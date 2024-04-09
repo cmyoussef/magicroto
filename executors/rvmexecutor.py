@@ -25,8 +25,8 @@ class RVMExecutor(BaseExecutor):
         self.parser.add_argument('--disable-progress', action='store_true')
 
     def run(self):
-        logger.info(f'running rvm.converter.convert {self.args_dict}')
 
+        logger.info(f"RVM converter running{self.args_dict}")
         self.converter.convert(
             input_path=self.args.input_path,
             ouput_path=self.args.output,
@@ -44,6 +44,6 @@ if __name__ == '__main__':
     try:
         lvl = int(executor.args_dict.get('logger_level'))
     except TypeError:
-        lvl = 20
+        lvl = 20  # set to info level
     logger.setLevel(lvl)
     executor.run()
