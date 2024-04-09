@@ -10,7 +10,7 @@ class ConfigLoader(Base_ConfigLoader):
         super().__init__()
         self.script_paths['RVM'] = os.path.join(self.project_directory, 'executors', 'rvmexecutor.py')
 
-    @staticmethod
-    def _get_current_directory():
+    @property
+    def current_directory(self):
         """Get the current directory path."""
         return os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))

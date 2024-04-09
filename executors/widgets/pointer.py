@@ -174,7 +174,7 @@ class PointerWindow(QtWidgets.QMainWindow):
 def test_run():
     app = QtWidgets.QApplication([])
 
-    in_args = {'python_path': config_dict.get('python_path'),
+    in_args = {'python_exe': config_dict.get('python_exe'),
                'cache_dir': config_dict.get('cache_dir'),
                'SAM_checkpoint': r'D:/track_anything_project/sam_vit_h_4b8939.pth',
                'model_type': 'vit_h',

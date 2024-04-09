@@ -32,7 +32,7 @@ class MagicRotoSelector(GizmoBase):
             self.args['script_path'] = easy_roto_path
             self.populate_ui()
 
-        self.pointer_gui_args = {'python_path': self.args.get('python_path'),
+        self.pointer_gui_args = {'python_exe': self.args.get('python_exe'),
                                  'cache_dir': self.args.get('cache_dir'),
                                  'SAM_checkpoint': os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth'),
                                  'model_type': 'vit_h',
@@ -113,7 +113,7 @@ class MagicRotoSelector(GizmoBase):
 
     def update_args(self):
         super().update_args()
-        self.args['python_path'] = self.python_path
+        self.args['python_exe'] = self.python_path
         self.args['cache_dir'] = self.cache_dir
 
         for k, v in self.args.items():
@@ -125,7 +125,7 @@ class MagicRotoSelector(GizmoBase):
         self.pointer_gui_args['script_path'] = easy_roto_gui_path
         self.pointer_gui_args['cache_dir'] = self.cache_dir
         self.pointer_gui_args['SAM_checkpoint'] = os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth')
-        self.pointer_gui_args['python_path'] = self.python_path
+        self.pointer_gui_args['python_exe'] = self.python_path
 
     def load_img(self):
 
@@ -147,7 +147,7 @@ class MagicRotoSelector(GizmoBase):
         # 'script_path': easy_roto_gui_path
         self.pointer_gui_args['image'] = init_img_path
         self.pointer_gui_args['prompts'] = common_utils.get_dict_type(self.data)
-        # self.pointer_gui_args['python_path'] = self.python_path
+        # self.pointer_gui_args['python_exe'] = self.python_path
         # self.pointer_gui_args['cache_dir'] = self.cache_dir
         # if mask_input:
         # if mask_input:

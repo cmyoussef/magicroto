@@ -67,29 +67,46 @@ class ExecuteThread(threading.Thread):
         if self._cmd:
             return self._cmd
         # Extract necessary arguments
+        export_env = self.args.pop('export_env', {})
+
         args = self.args.copy()
-        python_exe = args.pop('python_path')
+        python_exe = args.pop('python_exe')
         script_path = args.pop('script_path')
+        
+        # Check if the python interpreter exists and is a file
+        if not os.path.isfile(python_exe):
+            raise FileNotFoundError(f"The python interpreter '{python_exe}' does not exist or is not a file.")
+
+        # Check if the python interpreter is executable
+        if not os.access(python_exe, os.X_OK):
+            raise PermissionError(f"The python interpreter '{python_exe}' is not executable.")
+
+        if not os.path.isfile(script_path):
+            raise FileNotFoundError(f"The file '{script_path}' does not exist.")
 
         cmd = [python_exe, script_path]
         # setting cache dir
-        cache_dir = self.args.get('cache_dir', None)
         cache_dir_str = ''
-        if cache_dir and not platform.system() == "Windows":
-            for v in ['HF_HOME', 'PIP_CACHE_DIR', 'TRANSFORMERS_CACHE']:
-                cache_dir_str += f'export {v}={cache_dir}\n'
+        if export_env:
+            for k, v in export_env.items():
+                if platform.system() == "Windows":
+                    cache_dir_str += f'set {k}={v}\n'
+                else:
+                    cache_dir_str += f'export {k}={v}\n'
+        if cache_dir_str:
             cmd.insert(0, cache_dir_str)
-        else:
-            cmd.insert(0, '')
 
         # Process other arguments
         for key, value in args.items():
-            # Serialize list or dict to JSON string
-            if isinstance(value, (list,)):
-                value = json.dumps(value)
             cmd.append(f'--{key}')
-            # quote everything if we are going to pass as string not a list
-            cmd.append(f'"{str(value)}"')
+            # Serialize list or dict to JSON string
+            str_value = json.dumps(value)
+            if isinstance(value, (list, )):
+                cmd.append(f'"{str(str_value)}"')
+            elif isinstance(value, (dict,)):
+                cmd.append(json.dumps(str_value))
+            else:
+                cmd.append(f'"{str(value)}"')
 
         # If pre- or post-commands exist, run them along with the main command
         cmd = " ".join(cmd)
@@ -106,7 +123,7 @@ class ExecuteThread(threading.Thread):
 
     @property
     def terminal_title(self):
-        port = self.args.get('ports', '')
+        port = self.args.get('port', '')
         title = f"server port {port}" if port else "test_uniq title"
         if isinstance(self.open_new_terminal, str):
             title += self.open_new_terminal
@@ -135,7 +152,7 @@ class ExecuteThread(threading.Thread):
             self.process.communicate(self.cmd.encode())  # Waits for the process to complete
 
             if use_call_back and self.callback is not None:
-                nuke.executeInMainThread(self.callback, args=(self.args.get('output', None),))
+                nuke.executeInMainThread(self.callback)
 
     def terminate(self):
         """

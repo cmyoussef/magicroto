@@ -31,7 +31,7 @@ class MagicRotoInPaint(GizmoBase):
             self.args['script_path'] = mg_inpaint_path
             self.populate_ui()
 
-        self.args = {'python_path': self.args.get('python_path'),
+        self.args = {'python_exe': self.args.get('python_exe'),
                      'cache_dir': self.args.get('cache_dir'),
                      'E2FGVI_checkpoint': os.path.join(self.args.get('cache_dir'), 'E2FGVI-HQ-CVPR22.pth'),
                      'device': "cuda:0",
@@ -48,7 +48,7 @@ class MagicRotoInPaint(GizmoBase):
 
     def update_args(self):
         self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
-        self.args['python_path'] = self.python_path
+        self.args['python_exe'] = self.python_path
         self.args['cache_dir'] = self.cache_dir
 
         start_frame, end_frame = self.frame_range

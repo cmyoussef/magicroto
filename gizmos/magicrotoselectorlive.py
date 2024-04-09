@@ -30,7 +30,7 @@ class MagicRotoSelectorLive(GizmoBase):
             self.args['script_path'] = mg_selector_live_path
             self.populate_ui()
 
-        self.args = {'python_path': self.args.get('python_path'),
+        self.args = {'python_exe': self.args.get('python_exe'),
                      'cache_dir': self.args.get('cache_dir'),
                      'SAM_checkpoint': os.path.join(self.args.get('cache_dir'), 'sam_vit_h_4b8939.pth'),
                      'model_type': 'vit_h',

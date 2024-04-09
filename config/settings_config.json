@@ -1,5 +1,6 @@
 {
     "python_path": "/jobs/ADGRE/ldev_pipe/nuke/Track-Anything/trackAnyThing/venv/bin/python",
+    "python_exe": "/jobs/ADGRE/ldev_pipe/nuke/Track-Anything/trackAnyThing/venv/bin/python",
     "cache_dir": "/jobs/ADGRE/ldev_pipe/nuke/Track-Anything/trackAnyThing/Track-Anything/checkpoints/",
     "output_dir": "/u/mahy/magic-roto",
     "pre_cmd": "bob-world -t python3.9",

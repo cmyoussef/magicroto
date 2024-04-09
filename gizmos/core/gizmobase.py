@@ -6,9 +6,11 @@ import threading
 import time
 import traceback
 from datetime import datetime
+import platform
 
 import nuke
 
+import magicroto
 from magicroto.config.config_utils import config_dict
 from magicroto.gizmos.core.ui_doc import UIElementDocs
 from magicroto.utils import common_utils
@@ -29,20 +31,14 @@ class GizmoBase:
 
     def __new__(cls, gizmo=None, name=None):
 
-        logger.debug('run __new__')
         cls._instances.setdefault(cls.__name__, {})
-        # gizmo = gizmo or name
         if gizmo and gizmo in cls._instances[cls.__name__]:
             instance = cls._instances[cls.__name__][gizmo]
             instance._initialized = True
-            # instance._settings_is_loaded = True
-            logger.debug('\t use old instance')
+            
         else:
             instance = super().__new__(cls)
             instance._initialized = False
-            logger.debug('\t create new instance')
-            # instance._settings_is_loaded = False
-        instance._settings_is_loaded = gizmo is not None
         return instance
 
     def __init__(self, gizmo=None, name=None):
@@ -62,6 +58,7 @@ class GizmoBase:
         if self._initialized:
             logger.debug('\t stop init')
             return
+        self._settings_is_loaded = False
         self.is_client_connected = None
         self.mask_client = None
         self.thread_list = []
@@ -70,8 +67,8 @@ class GizmoBase:
         # store the instance to re-use it later
         self._instances[self.__class__.__name__][self.gizmo.name()] = self
         self.cache_dir = config_dict.get('cache_dir', '')
-        self._python_path = config_dict.get('python_path', '')
-        self.args = {'python_path': self.python_path, 'unsupported_args': self.unsupported_args,
+        self._python_path = config_dict.get('python_exe', '')
+        self.args = {'python_exe': self.python_path, 'unsupported_args': self.unsupported_args,
                      'cache_dir': self.cache_dir}
         self.gizmo.begin()
         self.output_node.setInput(0, self.input_node)
@@ -139,9 +136,9 @@ class GizmoBase:
             self.mask_client.setblocking(False)
             self.is_client_connected = True
             logger.info(f"Successfully connected to server at port {self.main_port}")
-            self.set_status(True, f"Successfully connected to server at port {self.main_port}", )
-            # nuke.executeInMainThread(self.set_status,
-            #                          args=(True, f"Successfully connected to server at port {self.main_port}",))
+            # self.set_status(True, f"Successfully connected to server at port {self.main_port}", )
+            nuke.executeInMainThread(self.set_status,
+                                     args=(True, f"Successfully connected to server at port {self.main_port}",))
             # self.set_status(True, f"Successfully connected to server at port {self.main_port}")
             return True
 
@@ -172,8 +169,8 @@ class GizmoBase:
         thread.start()
         self.thread_list.append(thread)
 
-        logger.info(f"Started server at port {self.main_port}")
-        self.set_status(True, f"Started server at port {self.main_port}")
+        # logger.info(f"Started server at port {self.main_port}")
+        self.set_status(True, f"Starting server at port {self.main_port}")
 
     def attempt_reconnect(self):
         thread = threading.Thread(target=self._attempt_reconnect, args=())
@@ -184,11 +181,9 @@ class GizmoBase:
     def _attempt_reconnect(self):
         retry_count = 0
         while not self.connect_to_server() and retry_count < 5:
-            time.sleep(1)  # Waiting for 1 second before retrying
+            time.sleep(retry_count+1)  # Waiting for 1 second before retrying
             retry_count += 1
             logger.info(f"Retrying connection to server (Attempt {retry_count})")
-            if retry_count == 4:
-                self.main_port = SocketServer.find_available_port()
         if retry_count == 5:
             logger.error("Failed to connect to the server after multiple attempts.")
 
@@ -255,6 +250,7 @@ class GizmoBase:
         self.create_settings_knobs()
         self.gizmo.end()
         self.populate_doc()
+        self.load_settings()
 
     def update_cache_dir(self):
         cache_dir_node = self.gizmo.knob("cache_dir")
@@ -350,7 +346,7 @@ class GizmoBase:
 
     def get_config_settings(self):
         return {
-            'python_path': self.gizmo.knob("python_path_knob").value(),
+            'python_exe': self.gizmo.knob("python_path_knob").value(),
             'cache_dir': self.gizmo.knob("cache_dir").value(),
             'output_dir': self.gizmo.knob("output_dir").value(),
             'pre_cmd': self.gizmo.knob("pre_cmd_knob").value(),
@@ -375,8 +371,11 @@ class GizmoBase:
             nuke.tprint(f"An error occurred: {e}")
 
     def load_settings(self, node=None):
-        if self._settings_is_loaded:
+        
+        if hasattr(self, '_settings_is_loaded') and self._settings_is_loaded:
             return
+        
+        self._settings_is_loaded = True
 
         node = node or self.gizmo
         home_directory = os.path.expanduser("~")
@@ -388,22 +387,33 @@ class GizmoBase:
             self.set_knob_info(info_dict, node)
         else:
             nuke.tprint(f"{file_path} file does not exist.")
-        self.load_config()
+        # self.load_config()
 
     def load_config(self):
         home_directory = os.path.expanduser("~")
         file_path = os.path.join(home_directory, ".magicRoto_config")
-        fresh_load_config = config_dict
+        fresh_load_config = {}
         if os.path.exists(file_path):
             print(f'loading from {file_path}')
             with open(file_path, 'r') as f:
                 fresh_load_config = json.load(f)
-
-        self.gizmo.knob("python_path_knob").setValue(fresh_load_config.get('python_path', ''))
-        self.gizmo.knob('cache_dir').setValue(fresh_load_config.get('cache_dir', ''))
-        self.gizmo.knob('output_dir').setValue(fresh_load_config.get('output_dir', ''))
-        self.gizmo.knob('pre_cmd_knob').setValue(fresh_load_config.get('pre_cmd', ''))
-        self.gizmo.knob('post_cmd_knob').setValue(fresh_load_config.get('post_cmd', ''))
+        
+        fresh_load_config.update(config_dict)
+        print('*'*100)
+        print(fresh_load_config)
+        print('*'*100)
+        print(config_dict)
+        print('*'*100)
+        knobs = [
+            ['python_path_knob', 'python_exe'],
+            ['cache_dir', 'cache_dir'],
+            ['output_dir', 'output_dir'],
+            ['pre_cmd_knob', 'pre_cmd'],
+            ['post_cmd_knob', 'post_cmd']
+        ]
+        for (knob, key) in knobs:
+            knob_obj = self.gizmo.knob(knob)
+            knob_obj.setValue(fresh_load_config.get(key, ''))
         self.cache_dir = self.gizmo.knob('cache_dir').value()
         self.cache_dir = self.gizmo.knob('cache_dir').value()
 
@@ -543,7 +553,7 @@ class GizmoBase:
             port_knob = nuke.Int_Knob('port_knob', f'Port {Icons.key_symbol}')
             port_knob.setFlag(nuke.STARTLINE)
             # port_knob.setValue(SocketServer.find_available_port())
-            port_knob.setValue(64306)
+            port_knob.setValue(38671)
             self.gizmo.addKnob(port_knob)
 
         if not self.gizmo.knob('find_available_port_knob'):
@@ -688,9 +698,25 @@ class GizmoBase:
         return self.get_node("Output1", 'Output')
 
     def update_args(self):
+
+        # Define a list of environment keys that will be used to set up the environment for the external process
+        env_keys = ['HF_HOME', 'PIP_CACHE_DIR', 'TRANSFORMERS_CACHE']
+
+        # Create a dictionary where each key from env_keys is associated with the cache directory path
+        # This will be used to set up the environment variables for the external process
+        self.args['export_env'] = dict([(k, self.cache_dir) for k in env_keys])
+
+        # Get the directory path of the magicroto module
+        magicroto_dir = os.path.dirname(os.path.dirname(os.path.abspath(magicroto.__file__)))
+        magicroto_dir = magicroto_dir.replace('\\', '/')  # Replace backslashes with forward slashes for compatibility
+        PYTHONPATH_ = '%PYTHONPATH%;' if platform.system() == "Windows" else '$PYTHONPATH:'
+        # Add the magicroto directory path to the PYTHONPATH environment variable
+        # This ensures that the external process has access to the magicroto module
+        self.args['export_env']['PYTHONPATH'] = f'{PYTHONPATH_}"{magicroto_dir}"'
+
         self.args['logger_level'] = logger_level.get(self.gizmo.knob('logger_level_menu').value(), 20)
         self.args['ports'] = self.ports
-        self.args['python_path'] = self.python_path
+        self.args['python_exe'] = self.python_path
         self.args['cache_dir'] = self.cache_dir
 
     @property

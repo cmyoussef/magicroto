@@ -11,7 +11,7 @@ python_exe = python_exe + '.exe' if platform.system() == "Windows" else python_e
 python_exe = python_exe if os.path.exists(python_exe) else ''
 
 home_directory = os.path.expanduser("~")
-tool_config_path = os.path.join(current_dir, "magicRoto_settings.json")
+tool_config_path = os.path.join(current_dir, "settings_config.json")
 file_path = os.path.join(home_directory, ".magicRoto_config")
 
 config_dict = {}
@@ -23,7 +23,7 @@ if os.path.exists(file_path):
     with open(file_path, 'r') as f:
         config_dict.update(json.load(f))
 
-config_dict['python_path'] = config_dict.get('python_path', python_exe)
+config_dict['python_exe'] = config_dict.get('python_exe', python_exe)
 
 rvmexecutor_path = os.path.join(DIR_PATH, 'executors', 'rvmexecutor.py')
 easy_roto_path = os.path.join(DIR_PATH, 'executors', 'easyrotoexecutor.py')

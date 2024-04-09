@@ -3,6 +3,12 @@ python inference.py \
     --variant mobilenetv3 \
     --checkpoint "CHECKPOINT" \
     --device cuda \
+    --input-source "input.mp4" \
+    --output-type video \
+    --output-composition "composition.mp4" \
+    --output-alpha "alpha.mp4" \
+    --output-foreground "foreground.mp4" \
+    --output-video-mbps 4 \
     --seq-chunk 1
 """
 
@@ -107,7 +113,7 @@ if __name__ == '__main__':
 
     converter = Converter(args.variant, args.checkpoint, args.device)
     converter.convert(
-        input_path=args.input_source,
+        input_source=args.input_source,
         downsample_ratio=args.downsample_ratio,
         output_type=args.output_type,
         seq_chunk=args.seq_chunk,

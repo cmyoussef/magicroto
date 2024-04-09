@@ -12,13 +12,14 @@ class RVM(Base):
         super().__init__(gizmo=gizmo, name=name)
         self.copy_alpha_nods()
 
+
     def create_generate_knobs(self):
         self.create_generate_tab()
-
+        # variant menu
         if not self.gizmo.knob('variant_menu'):
-            variant_menu = nuke.Enumeration_Knob('variant_menu', 'Variant', ['mobilenetv3', 'resnet50'])
-            variant_menu.setFlag(nuke.STARTLINE)
-            self.gizmo.addKnob(variant_menu)
+            logger_level_menu = nuke.Enumeration_Knob('variant_menu', 'Variant', ['mobilenetv3', 'resnet50'])
+            logger_level_menu.setFlag(nuke.STARTLINE)
+            self.gizmo.addKnob(logger_level_menu)
 
         format_mult = self.gizmo.knob(f'down_size_mult_knob')
         if not format_mult:
@@ -31,7 +32,6 @@ class RVM(Base):
             chunk_size_knob.setValue(1)
             chunk_size_knob.setRange(1, 50)
             self.gizmo.addKnob(chunk_size_knob)
-
         super().create_generate_knobs()
 
     def update_args(self):
@@ -39,10 +39,12 @@ class RVM(Base):
         variant = self.gizmo.knob('variant_menu').value()
         self.args['variant'] = variant
         self.args['checkpoint'] = f'{self.cache_dir}/rvm_{variant}.pth'
-        input_01 = self.write_input(self.get_input_img_path(self.input_node), self.input_node, hard_error=True)
-        self.args['input_path'] = input_01
         self.args['frame_range'] = f'{self.frame_range}'
         self.args['seq-chunk'] = int(self.gizmo.knob('chunk_size_knob').value())
+
+        down_size = self.gizmo.knob(f'down_size_mult_knob').value()
+        if down_size <= .9:
+            self.args['downsample-ratio'] = down_size
 
     def knobChanged(self, knob=None):
         knob = knob or nuke.thisKnob()
