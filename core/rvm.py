@@ -74,15 +74,28 @@ def convert_video(model,
     with torch.no_grad():
         bar = tqdm(total=len(source), disable=not progress, dynamic_ncols=True)
         rec = [None] * 4
-        for i, src in enumerate(reader):
-            src = src.to(device, dtype, non_blocking=True).unsqueeze(0)  # [B, T, C, H, W]
-            fgr, pha, *rec = model(src, *rec, downsample_ratio)
 
-            # for for t in range(frames.shape[0]):
-            output_path = ouput_path.replace('.%04d.', f'.{frame_range[i]:04d}.')
-            to_pil_image(pha[0][0]).save(output_path)
-            bar.update(src.size(1))
+        frame_count = 0
+        for i, pkg in enumerate(reader):
+            for n in range(pkg.size(0)):
+                src = pkg[n].unsqueeze(0)
+                if not downsample_ratio:
+                    downsample_ratio = auto_downsample_ratio(*src.shape[2:])
 
+                src = src.to(device, dtype, non_blocking=True).unsqueeze(0)  # [B, T, C, H, W]
+                fgr, pha, *rec = model(src, *rec, downsample_ratio)
+
+                # for for t in range(frames.shape[0]):
+                output_path = ouput_path.replace('.%04d.', f'.{frame_range[frame_count]:04d}.')
+                to_pil_image(pha[0][0]).save(output_path)
+                bar.update(src.size(1))
+                frame_count += 1
+
+def auto_downsample_ratio(h, w):
+    """
+    Automatically find a downsample ratio so that the largest side of the resolution be 512px.
+    """
+    return min(512 / max(h, w), 1)
 
 class Converter:
     def __init__(self, variant: str, checkpoint: str, device: str):

@@ -138,8 +138,8 @@ def populate_toolbar(toolbar, dev_mode=False):
             cmd_module = cls.__module__
             classes_list.append(f'{cmd_module}.{cmd_name}')
             base_class = cmd_module.rsplit('.')[0]
-            m.addCommand(f'NB_{cmd_name}', f"import {base_class};{cmd_module}.{cmd_name}(name='NB_{cmd_name}')")
-            print(f"|_|_creating button NB_{cmd_name} with class {cmd_module}.{cmd_name}(name='NB_{cmd_name}')")
+            m.addCommand(f'MR_{cmd_name}', f"import {base_class};{cmd_module}.{cmd_name}(name='MR_{cmd_name}')")
+            print(f"|_|_creating button MR_{cmd_name} with class {cmd_module}.{cmd_name}(name='MR_{cmd_name}')")
         m.addSeparator()
 
     for c in all_classes_from_module(full_package_name.rsplit('.')[0]):

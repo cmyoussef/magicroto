@@ -229,6 +229,10 @@ class GizmoBase:
                 self.mask_client = None
             except ConnectionResetError:
                 pass
+            try:
+                self.on_interrupt()
+            except:
+                pass
             logger.info("Closing Command sent.")
 
     # endregion

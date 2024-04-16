@@ -177,12 +177,20 @@ class SocketServer(ServerClientBase, metaclass=SingletonMeta):
         handler_logger = f', DataHandler:{data_handler.__name__}' if data_handler else ''
         logger.info(f"Server created on port {self.port}, Host:{host}{handler_logger}")
 
+
     @staticmethod
     def find_available_port():
-        temp_sock = socket.socket()
+        # Create a temporary socket with the correct arguments
+        temp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Enable the SO_REUSEADDR option
+        temp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Bind to an available port chosen by the OS
         temp_sock.bind(('', 0))
+        # Retrieve the chosen port
         port = temp_sock.getsockname()[1]
+        # Close the temporary socket
         temp_sock.close()
+        # Return the found port
         return port
 
     def start_accepting_clients(self, data_handler=None, return_response_data=False):

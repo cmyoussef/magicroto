@@ -1,5 +1,9 @@
 import ast
 import sys 
+import os
+package_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if os.getenv('NUKE_DEV', False) and package_path not in sys.path:
+    sys.path.insert(0, package_path)
 
 from nukebridge.executors.core.baseexecutor import BaseExecutor, logger
 
@@ -18,7 +22,7 @@ class RVMExecutor(BaseExecutor):
         self.parser.add_argument('--checkpoint', type=str, required=True)
         self.parser.add_argument('--device', type=str, default='cuda')
         # self.parser.add_argument('--input', type=str, required=True)
-        self.parser.add_argument('--downsample-ratio', type=float, default=1)
+        self.parser.add_argument('--downsample-ratio', type=float, default=0)
         self.parser.add_argument('--output-type', type=str, choices=['png'], default='png')
         self.parser.add_argument('--seq-chunk', type=int, default=1)
         self.parser.add_argument('--num-workers', type=int, default=0)
