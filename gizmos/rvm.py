@@ -55,7 +55,8 @@ class RVM(Base):
         self.args['checkpoint'] = f'{self.cache_dir}/rvm_{variant}.pth'
         self.args['frame_range'] = f'{self.frame_range}'
         self.args['seq-chunk'] = int(self.gizmo.knob('chunk_size_knob').value())
-
+        # forcing magic-roto to be on the same terminal 
+        self.gizmo.knob('open_new_terminal').setValue(False)
 
     def knobChanged(self, knob=None):
         knob = knob or nuke.thisKnob()

@@ -78,7 +78,7 @@ def convert_video(model,
         frame_count = 0
         for i, pkg in enumerate(reader):
             for n in range(pkg.size(0)):
-                src = pkg[n].unsqueeze(0)
+                src = pkg[n].unsqueeze(0)[:, :3, :, :]
                 if not downsample_ratio:
                     downsample_ratio = auto_downsample_ratio(*src.shape[2:])
 
