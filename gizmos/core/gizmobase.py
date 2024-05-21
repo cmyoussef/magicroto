@@ -331,7 +331,10 @@ class GizmoBase:
                         value = bool(value)
                     # Add more types if necessary
 
-                    node[knob].setValue(value)
+                    try:
+                        node[knob].setValue(value)
+                    except:
+                        pass
                 else:
                     print(f"Knob {knob} does not exist in the node.")
 
