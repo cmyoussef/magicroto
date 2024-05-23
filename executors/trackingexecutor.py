@@ -64,8 +64,8 @@ class TrackingExecutor:
         parser.add_argument('--mask_path', required=True, help='Wildcard path to the mask images')
         parser.add_argument('--output', required=True, help='Directory to save tracked mask images')
         parser.add_argument('--ratio', type=float, default=1, help='Down-sampling ratio')
-        parser.add_argument('--logger_level', type=int, default=1001, help='First frame to paint')
-        parser.add_argument('--mask_frames', type=json.loads, default=1001, help='List of frame numbers for the mask')
+        parser.add_argument('--logger_level', type=int, default=20, help='First frame to paint')
+        parser.add_argument('--mask_frames', type=json.loads,  help='List of frame numbers for the mask')
         parser.add_argument('--start_frame', type=int, default=1001, help='First frame to paint')
         parser.add_argument('--end_frame', type=int, default=1001, help='Last frame to paint')
         return parser
@@ -104,7 +104,7 @@ class TrackingExecutor:
 
         self.args['frames_to_track'] = TrackingExecutor.track_masks(self.args['start_frame'], self.args['end_frame'],
                                                                     self.args['mask_frames'])
-        logger.debug(f"frames_to_track: self.args['frames_to_track']")
+        logger.debug(f"frames_to_track: {self.args['frames_to_track']}")
 
         self.args['np_frames'] = image_utils.load_images(self.args['image_path'], mode='RGB',
                                                          frame_range=self.args['frame_range'], return_dict=True)

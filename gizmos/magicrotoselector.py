@@ -13,9 +13,7 @@ from magicroto.utils.icons import Icons
 from magicroto.utils.logger import logger, logger_level
 from magicroto.utils.soketserver import SocketServer
 
-
-def dummy_function(x, y):
-    print(f"Dummy function called. Coordinates: x={x}, y={y}")
+DEV_CLS = True
 
 
 class MagicRotoSelector(GizmoBase):

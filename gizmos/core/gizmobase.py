@@ -1,12 +1,12 @@
 import inspect
 import json
 import os
+import platform
 import socket
 import threading
 import time
 import traceback
 from datetime import datetime
-import platform
 
 import nuke
 
@@ -35,7 +35,7 @@ class GizmoBase:
         if gizmo and gizmo in cls._instances[cls.__name__]:
             instance = cls._instances[cls.__name__][gizmo]
             instance._initialized = True
-            
+
         else:
             instance = super().__new__(cls)
             instance._initialized = False
@@ -181,7 +181,7 @@ class GizmoBase:
     def _attempt_reconnect(self):
         retry_count = 0
         while not self.connect_to_server() and retry_count < 5:
-            time.sleep(retry_count+1)  # Waiting for 1 second before retrying
+            time.sleep(retry_count + 1)  # Waiting for 1 second before retrying
             retry_count += 1
             logger.info(f"Retrying connection to server (Attempt {retry_count})")
         if retry_count == 5:
@@ -375,10 +375,10 @@ class GizmoBase:
             nuke.tprint(f"An error occurred: {e}")
 
     def load_settings(self, node=None):
-        
+
         if hasattr(self, '_settings_is_loaded') and self._settings_is_loaded:
             return
-        
+
         self._settings_is_loaded = True
 
         node = node or self.gizmo
@@ -401,13 +401,13 @@ class GizmoBase:
             print(f'loading from {file_path}')
             with open(file_path, 'r') as f:
                 fresh_load_config = json.load(f)
-        
+
         fresh_load_config.update(config_dict)
-        print('*'*100)
+        print('*' * 100)
         print(fresh_load_config)
-        print('*'*100)
+        print('*' * 100)
         print(config_dict)
-        print('*'*100)
+        print('*' * 100)
         knobs = [
             ['python_path_knob', 'python_exe'],
             ['cache_dir', 'cache_dir'],
@@ -807,7 +807,7 @@ class GizmoBase:
         node = node or self.input_node
         if not self.is_connected(node):
             self.gizmo.begin()
-
+        self.gizmo.begin()
         # Use a Write node to save the input image
         write_node = nuke.nodes.Write()
         write_node['create_directories'].setValue(True)
@@ -869,7 +869,9 @@ class GizmoBase:
 
         if self.gizmo.knob('use_external_execute').value():
             nuke.tprint(f"{'-' * 100}\nExternal Execute")
-            output = run_external(thread.cmd)
+            jobName = self.gizmo.name()
+            cardName = self.__class__.__name__
+            output = run_external(thread.cmd, jobName=jobName, cardName=cardName)
             nuke.tprint(f'{output}')
         else:
             thread.start()
@@ -1013,6 +1015,19 @@ class GizmoBase:
     def on_destroy(self):
         if nuke.thisNode() == self.gizmo:
             self.close_server()
+
+    @classmethod
+    def get_key_frames(cls, node, knob_name=None):
+        # Get the keyframes of the second input node
+        keyframes = []
+        for name, knob in node.knobs().items():
+            if knob_name is not None and name != knob_name:
+                continue
+            if hasattr(knob, 'animations'):
+                for anim in knob.animations():
+                    for k in anim.keys():
+                        keyframes.append(k.x)
+        return sorted(list(set(keyframes)))
 
 
 if __name__ == '__main__':

@@ -60,10 +60,12 @@ class MagicRotoTracker(GizmoBase):
         self.writeInput(image_path, self.input_node, frame_range=(start_frame, end_frame))
         self.args['image_path'] = image_path
 
+        self.args['ref_frames'] = self.get_key_frames()
+
         mask_path = self.add_padding(self.get_init_img_path('mask'))
         self.writeInput(mask_path, self.mask_node, frame_range=None)
         self.args['mask_path'] = mask_path
-        self.args['mask_frames'] = [nuke.frame()]
+        self.args['mask_frames'] = [self.get_key_frames()]
         self.args['output'] = self.output_file_path
 
     def on_execute(self):
@@ -71,6 +73,10 @@ class MagicRotoTracker(GizmoBase):
         super().on_execute()
         logger.debug(f"{read_node}, {self.args['output']}")
         self.check_multiple_files(read_node, self.args['output'])
+
+    def get_key_frames(self):
+        node = self.gizmo.input(1)
+        return super().get_keyFrames(node)
 
     @property
     def output_file_path(self):

@@ -253,10 +253,12 @@ class MagicRotoSelectorLive(GizmoBase):
             # nuke.executeInMainThread(nuke.frame, args=(i, ))
             self.force_evaluate_nodes()
             logger.debug(f"Move to frame {i}")
+            nuke.frame(i)
             if not os.path.exists(existing_file):
                 self.writeInput(init_img_path, self.input_node, frame_range=(i, i))
             else:
-                self.writeInput(init_img_path, self.input_node, frame_range=(i, i), temp=True)
+                nuke.executeInMainThread(nuke.updateUI)
+                # self.writeInput(init_img_path, self.input_node, frame_range=(i, i), temp=True)
 
             y_shift = Image.open(existing_file).height
             prompt_data = self.get_prompt_data()
